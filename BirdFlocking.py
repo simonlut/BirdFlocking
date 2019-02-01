@@ -5,21 +5,39 @@
 # 3D Printing Agent-Based BirdFlocking
 ###############################################
 
-
-
 import Rhino.Geometry as rg
 
-class AgentSystem:
+class EnvironmentBoundary:
+    def __init__():
+        pass
+
+    def CreateBoundaryBox(self):
+        pass
+
+    def CreateObstacles3d(self):
+        pass
+
+    def CreateUpliftAreas(self):
+        pass
+
+    def CreateWindGradient(self):
+        pass
+
+
+class BirdSystem:
     #Creating different types of agents
     #Realtime flocking optimization using R-Tree system.
+    def RecordHistory(self):
+        pass
 
-    pass
-
-class Agent:
+class Bird:
     def __init__():
         pass
 
     def ComputeFoodToNestVector(self):
+        pass
+
+    def ComputeNestToFoodVector(self):
         pass
 
     def ComputeUpliftVector(self):
@@ -31,11 +49,25 @@ class Agent:
     def ComputeWindVector(self):
         pass
 
-    def ComputePredatorAvoidVector(self):
+    def ComputeAvoidPredatorVector(self):
         pass
 
     def ComputeAvoidObstacleVector(self):
         pass
 
+    def Die(self):
+        pass
+
 class Predator(Agent):
-    pass
+    def __init__():
+        pass
+
+    def ComputeBirdDensityVector(self):
+        pass
+
+    def ComputeRandomMovement(self):
+        pass
+
+    def EatBird(self):
+        pass
+
