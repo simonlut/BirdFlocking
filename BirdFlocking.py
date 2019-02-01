@@ -14,23 +14,41 @@ class EnvironmentBoundary:
     def CreateBoundaryBox(self):
         pass
 
-    def CreateObstacles3d(self):
+    def CreateObstacle3d(self):
         pass
 
-    def CreateUpliftAreas(self):
+    def CreateUpliftArea(self):
         pass
 
     def CreateWindGradient(self):
         pass
 
 
+class Agent:
+    def ComputeAvoidObstacleVector(self):
+        pass
+
+    def ComputeWindVector(self):
+        pass
+
+    def ComputeUpliftVector(self):
+        pass
+
+
 class BirdSystem:
     #Creating different types of agents
     #Realtime flocking optimization using R-Tree system.
+    def __init__():
+        pass
+
     def RecordHistory(self):
         pass
 
-class Bird:
+class PredatorSystem:
+    def __init__():
+        pass
+
+class Bird(Agent):
     def __init__():
         pass
 
@@ -40,19 +58,10 @@ class Bird:
     def ComputeNestToFoodVector(self):
         pass
 
-    def ComputeUpliftVector(self):
-        pass
-
     def ComputeFlockingVector(self):
         pass
 
-    def ComputeWindVector(self):
-        pass
-
     def ComputeAvoidPredatorVector(self):
-        pass
-
-    def ComputeAvoidObstacleVector(self):
         pass
 
     def Die(self):
