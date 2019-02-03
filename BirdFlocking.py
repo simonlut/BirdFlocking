@@ -75,7 +75,7 @@ class Bird(Agent):
     def ComputeNestToFoodVector(self):
         toFood = iFoodSource - self.Position
         toFood.Unitize()
-        toFood *= iFoodStrength
+        toFood *= iFoodStrength**2
         self.DesiredVelocity = toFood
 
     def ComputeFlockingVector(self):
@@ -86,22 +86,33 @@ class Bird(Agent):
         #Cohesion
         #Try to find birds of same colour and attract to them up to a certain seperation distance.
         #If to close -> get away until seperationdistance = true
-        for theOtherBird in birdSystem.Birds:
-            if self == theOtherBird: continue
-            findBirds = theOtherBird.Position - self.Position
-            distance = findBirds.Length
+        
+
+        _birdPositions = []
+        for bird in birdSystem.Birds:
+            _birdPositions.append(bird.Position)
+
+        ClosestBirds = list(rg.RTree.Point3dClosestPoints(_birdPositions,[self.Position],iDetectonDistance))
+
+        for closebird in ClosestBirds[0]:
+            if _birdPositions[closebird] == self.Position: continue
+            goToBird = _birdPositions[closebird] - self.Position
+            distance = goToBird.Length
                        
             if (distance < iSeparationDistance):
-                getAway = self.Position - theOtherBird.Position
-                getAway *= iSeparationStrength / (distance + 1)
+                getAway = self.Position - _birdPositions[closebird]
+                getAwayDistance = getAway.Length
+                getAway.Unitize()
+                getAway *= iSeparationStrength * (1 - (getAwayDistance/iSeparationDistance))**2
                 self.DesiredVelocity += getAway
 
             else:
-                findBirds.Unitize()
-                findBirds *= iSeparationStrength / (distance + 1)
-                self.DesiredVelocity += findBirds
+                goToBird.Unitize()
+                goToBird *= (iSeparationStrength / (distance + 1))**2
+                self.DesiredVelocity += goToBird
             
-
+   
+            #print(_bird)
     def ComputeAvoidPredatorVector(self):
         pass
 
@@ -112,7 +123,7 @@ class Bird(Agent):
         self.Velocity = 0.97 * self.Velocity + 0.03 * self.DesiredVelocity
         if (self.Velocity.Length > 0.1):
             self.Velocity.Unitize()
-            self.Velocity *= 0.1
+            self.Velocity *= iSpeed
             self.Position += self.Velocity
             self.History.append(self.Position)
 
