@@ -38,6 +38,7 @@ class BirdSystem:
             bird.ComputeNestToFoodVector()
             bird.ComputeFlockingVector()
             bird.ComputeWindVector()
+            bird.ComputeAvoidObstacleVector()
         for bird in self.Birds:
             bird.Update()
 
@@ -52,10 +53,19 @@ class Agent:
         self.Velocity = rg.Vector3d(0.0, 0.0, 0.0)
 
     def ComputeAvoidObstacleVector(self):
-        pass
+
+        ObjectCollide = iObstacle - self.Position
+        ObjectDistance = ObjectCollide.Length
+        
+        if ObjectDistance < (iObstacleSize + iDetectonDistance):
+            ObjectCollide.Unitize()
+            ObjectCollide *= -(1- (ObjectDistance / iDetectonDistance))**2*10*iCollideStrength
+            self.DesiredVelocity += ObjectCollide
+
+
 
     def ComputeWindVector(self):
-        self.DesiredVelocity += rg.Vector3d(iWindSpeedX,0.0,0.0)
+        self.DesiredVelocity += iWindSpeed
 
     def ComputeUpliftVector(self):
         uplift = EnvironmentBoundary.CreateUpliftArea()
