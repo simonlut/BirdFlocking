@@ -123,8 +123,6 @@ birdPositions = []
 
 for bird in birdSystem.Birds:
     birdPositions.append(bird.Position)
-    for i in range(len(bird.History)):
-        birdHistory.append(bird.History[i])
-
+    birdHistory.append(rg.PolylineCurve(bird.History))
 oHistory = birdHistory
 oPositions = birdPositions
