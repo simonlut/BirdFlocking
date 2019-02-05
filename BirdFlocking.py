@@ -14,7 +14,6 @@
 #Set up the environment properties (Boundaries & obstacles)
 #Set up a wind map
 
-#TESTING BRANCHING GITHUB
 
 import Rhino.Geometry as rg
 import random as rnd
@@ -50,12 +49,12 @@ class BirdSystem:
             bird.ComputeRandomMovement(0.05)
             bird.ComputeNestToFoodVector()
             bird.ComputeFlockingVector()
-            bird.ComputeWindVector()
-            #bird.ComputeAvoidObstacleVector()
-            bird.ComputeAvoidBrepsVector()
-            #bird.ComputeUpliftVector()
-            bird.TestUpliftRevolveVector(1.0, 3.0, 4.0)
-            bird.ComputeAvoidPredatorVector()
+            bird.ComputeWindVector(30)
+            #bird.ComputeAvoidObstacleVector() #Not used!!!
+            bird.ComputeAvoidBrepsVector(50)
+            #bird.ComputeUpliftVector()  #Not used!!!
+            bird.ComputeUpliftRevolveVector(1.0, 3.0, 4.0)
+            bird.ComputeAvoidPredatorVector(10)
         for bird in self.Birds:
             bird.Update()
 
@@ -70,9 +69,10 @@ class PredatorSystem:
         for predator in self.Predators:
             predator.ComputeRandomMovement(0.2)
             predator.SearchClosestBird(birdPositions)
-            predator.WaitingForFood(0.4, 0.5)
-            predator.ComputeAvoidBrepsVector()
-            predator.TestUpliftRevolveVector(0.05, 0.4, 0.5)
+            predator.WaitingForFood(2.0, 0.4, 0.5, 0.01)
+            predator.ComputeAvoidBrepsVector(25)
+            predator.ComputeUpliftRevolveVector(0.05, 0.4, 0.5)
+            predator.ComputeWindVector(0.1)
         for predator in self.Predators:
             predator.Update()
 
@@ -86,52 +86,54 @@ class Agent:
         randomVec = rg.Vector3d(rnd.uniform(-value, value),rnd.uniform(-value, value),rnd.uniform(-value, value))
         self.DesiredVelocity = randomVec
 
-    def ComputeAvoidObstacleVector(self):
-
+    def ComputeAvoidObstacleVector(self, strength): #Not used!!!!
         ObjectCollide = iObstacle - self.Position
-        ObjectDistance = ObjectCollide.Length
-        
+        ObjectDistance = ObjectCollide.Length     
         if ObjectDistance < (iObstacleSize + iDetectonDistance):
             ObjectCollide.Unitize()
             ObjectCollide *= -(1- (ObjectDistance / iDetectonDistance))**2*10*iCollideStrength
-            self.DesiredVelocity += ObjectCollide
+            ObjectCollide.Unitize()
+            self.DesiredVelocity += (ObjectCollide*strength)
 
 
-    def ComputeAvoidBrepsVector(self):
+    def ComputeAvoidBrepsVector(self, strength):
         for obstacle in iObstacleBreps:
             projectedPt = obstacle.ClosestPoint(self.Position)
             ObjectCollide = projectedPt - self.Position
             ObjectDistance = ObjectCollide.Length
             if ObjectDistance < iDetectonDistance:
                 ObjectCollide.Unitize()
-                ObjectCollide *= -(1- (ObjectDistance / iDetectonDistance))**2*10*iCollideStrength #better formula?
-                self.DesiredVelocity += ObjectCollide
+                ObjectCollide *= -(1- (ObjectDistance / iDetectonDistance))**2 #better formula?
+                ObjectCollide.Unitize()
+                self.DesiredVelocity += (ObjectCollide*strength)
 
 
-    def ComputeWindVector(self):
-        self.DesiredVelocity += iWindSpeed
+    def ComputeWindVector(self, strength):
+        iWindSpeed.Unitize()
+        self.DesiredVelocity += (iWindSpeed*strength)
 
-    def ComputeUpliftVector(self):
-       # uplift = EnvironmentBoundary.CreateUpliftArea()
+    def ComputeUpliftVector(self, strength): #Not used!!!!
         for i in range(len(iUpliftArea)):
             testInside = iUpliftArea[i].IsPointInside(self.Position, 0.1, True)
             if testInside == True:
                 upliftVector = rg.Vector3d(0.0, 0.0, iUpliftStrength[i]) 
-                self.DesiredVelocity += upliftVector
+                upliftVecotr.Unitize()
+                self.DesiredVelocity += (upliftVector*strength)
 
-    def TestUpliftRevolveVector(self, value, valueMin, valueMax):
-        for i in range(len(testUpliftArea)):
-            t = testUpliftArea[i].ClosestPoint(self.Position)[1]
-            projectedPt = testUpliftArea[i].PointAt(t)
+    def ComputeUpliftRevolveVector(self, strength, valueMin, valueMax):
+        for i in range(len(iUpliftCrvs)):
+            t = iUpliftCrvs[i].ClosestPoint(self.Position)[1]
+            projectedPt = iUpliftCrvs[i].PointAt(t)
             vec = projectedPt - self.Position
             length = vec.Length
-            if length < testUpliftRadius[i]:
+            if length < iUpliftRadius[i]:
                 vector = (rg.Vector3d(0.0, 0.0, iUpliftStrength[i]*200) / (length*length/10+5))
                 if self.Rotation == True:
                     vector.Rotate(rnd.uniform(valueMin, valueMax), rg.Vector3d(0,0,1))
                 else: 
                     vector.Rotate(rnd.uniform(-valueMin, -valueMax), rg.Vector3d(0,0,1))
-                self.DesiredVelocity += (vector*value)
+                vector.Unitize()
+                self.DesiredVelocity += (vector*strength)
 
 
             
@@ -189,15 +191,13 @@ class Bird(Agent):
                 goToBird *= (iSeparationStrength / (distance + 1))**2
                 self.DesiredVelocity += goToBird
             
-   
-            #print(_bird)
-    def ComputeAvoidPredatorVector(self):
+    def ComputeAvoidPredatorVector(self, strength):
         for predator in predatorSystem.Predators:
             getAway = self.Position - predator.Position 
             distance = getAway.Length
             if distance < iDetectonDistance:
-                self.DesiredVelocity += getAway*100
-
+                getAway.Unitize()
+                self.DesiredVelocity += (getAway*strength)
 
     def Die(self):
         pass
@@ -240,14 +240,16 @@ class Predator(Agent):
         else:
             self.Hunting = False
 
-    def WaitingForFood(self, valueMin, valueMax):
+    def WaitingForFood(self, strength, valueMin, valueMax, upliftStrength):
         if self.Hunting == False: 
             vec = rg.Vector3d(self.Velocity.X, self.Velocity.Y, 0.0)
             if self.Rotation == True:
                 vec.Rotate(rnd.uniform(valueMin, valueMax), rg.Vector3d(0,0,1))
             else: 
                 vec.Rotate(rnd.uniform(-valueMin, -valueMax), rg.Vector3d(0,0,1))
-            self.DesiredVelocity += vec
+            vec += rg.Vector3d(0.0, 0.0, upliftStrength)
+            vec.Unitize()
+            self.DesiredVelocity += (vec*strength)
 
     def ComputeBirdDensityVector(self):
         pass
