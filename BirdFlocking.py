@@ -5,6 +5,15 @@
 # 3D Printing Agent-Based BirdFlocking
 ###############################################
 
+
+#Todo : 
+#Multiple birds flocks
+#Predator needs to be able to eat the birds
+#Birds should have the behavior to get back to their nests
+#Predator should be able to idle after eating a bird (When not hungry anymore)
+#Set up the environment properties (Boundaries & obstacles)
+#Set up a wind map
+
 import Rhino.Geometry as rg
 import random as rnd
 import math
