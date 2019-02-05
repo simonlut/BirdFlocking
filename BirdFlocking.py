@@ -53,6 +53,7 @@ class BirdSystem:
             bird.ComputeAvoidBrepsVector()
             #bird.ComputeUpliftVector()
             bird.TestUpliftRevolveVector(1.0, 3.0, 4.0)
+            bird.ComputeAvoidPredatorVector()
         for bird in self.Birds:
             bird.Update()
 
@@ -189,13 +190,18 @@ class Bird(Agent):
    
             #print(_bird)
     def ComputeAvoidPredatorVector(self):
-        pass
+        for predator in predatorSystem.Predators:
+            getAway = self.Position - predator.Position 
+            distance = getAway.Length
+            if distance < iDetectonDistance:
+                self.DesiredVelocity += getAway*100
+
 
     def Die(self):
         pass
 
     def Update(self):
-        self.Velocity = 0.97 * self.Velocity + 0.03 * self.DesiredVelocity
+        self.Velocity = (1-iAgentVelocity) * self.Velocity + iAgentVelocity * self.DesiredVelocity
         if (self.Velocity.Length > 0.1):
             self.Velocity.Unitize()
             self.Velocity *= iSpeed
@@ -248,7 +254,7 @@ class Predator(Agent):
         pass
 
     def Update(self):
-        self.Velocity = 0.90 * self.Velocity + 0.10 * self.DesiredVelocity
+        self.Velocity = (1-iPredatorVelocity) * self.Velocity + iPredatorVelocity * self.DesiredVelocity
         if (self.Velocity.Length > 0.1):
             self.Velocity.Unitize()
             self.Velocity *= iSpeed
