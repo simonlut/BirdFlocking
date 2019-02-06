@@ -35,6 +35,7 @@ class EnvironmentBoundary:
     def CreateWindGradient(self):
         pass
 
+##########################################################################################################
 
 class BirdSystem:
     #Creating different types of agents
@@ -46,18 +47,25 @@ class BirdSystem:
 
     def Update(self):
         for bird in self.Birds:
+            if bird.Alive == False: continue 
+            bird.DieWithoutFood(500)
+            bird.Eat(50, 5)
             bird.ComputeRandomMovement(0.05)
+            bird.ComputeAvoidGroundFloor(5, 20)
             bird.ComputeNestToFoodVector()
             bird.ComputeFlockingVector()
             bird.ComputeWindVector(30)
             #bird.ComputeAvoidObstacleVector() #Not used!!!
-            bird.ComputeAvoidBrepsVector(50)
+            bird.ComputeAvoidBrepsVector(100)
             #bird.ComputeUpliftVector()  #Not used!!!
             bird.ComputeUpliftRevolveVector(1.0, 3.0, 4.0)
+            bird.ComputeGroupAvoidPredatorVector(10)
             bird.ComputeAvoidPredatorVector(10)
         for bird in self.Birds:
+            if bird.Alive == False: continue 
             bird.Update()
 
+##########################################################################################################
 
 class PredatorSystem:
     def __init__(self, predatorCount):
@@ -67,20 +75,29 @@ class PredatorSystem:
 
     def Update(self):
         for predator in self.Predators:
+            if predator.Alive == False: continue
+            predator.Hungry(1, 200)
+            predator.EatBird(5)
             predator.ComputeRandomMovement(0.2)
-            predator.SearchClosestBird(birdPositions)
+            predator.ComputeAvoidGroundFloor(1.0, 10)
+            predator.SearchClosestBird()
             predator.WaitingForFood(2.0, 0.4, 0.5, 0.01)
-            predator.ComputeAvoidBrepsVector(25)
+            predator.ComputeAvoidBrepsVector(100)
             predator.ComputeUpliftRevolveVector(0.05, 0.4, 0.5)
             predator.ComputeWindVector(0.1)
         for predator in self.Predators:
+            if predator.Alive == False: continue
             predator.Update()
 
+##########################################################################################################
 
 class Agent:
     def __init__(self, initialPosition):
         self.Position = initialPosition
         self.Velocity = rg.Vector3d(0.0, 0.0, 0.0)
+
+    def SpawnNewAgents(self, minAmount):
+        pass
 
     def ComputeRandomMovement(self, value):
         randomVec = rg.Vector3d(rnd.uniform(-value, value),rnd.uniform(-value, value),rnd.uniform(-value, value))
@@ -95,18 +112,31 @@ class Agent:
             ObjectCollide.Unitize()
             self.DesiredVelocity += (ObjectCollide*strength)
 
+    def ComputeAvoidGroundFloor(self, strength, detectionLength):
+        if self.Position.Z < 0.5:
+            self.Alive = False
+            self.Display = "Dead"
+        elif self.Position.Z < detectionLength:
+            #uplift = (detectionLength**2- - self.Position.Z**2)*strength
+            uplift = (detectionLength / self.Position.Z -0.99) * strength
+            self.DesiredVelocity += rg.Vector3d(0, 0, uplift)
+
 
     def ComputeAvoidBrepsVector(self, strength):
         for obstacle in iObstacleBreps:
             projectedPt = obstacle.ClosestPoint(self.Position)
-            ObjectCollide = projectedPt - self.Position
-            ObjectDistance = ObjectCollide.Length
-            if ObjectDistance < iDetectonDistance:
-                ObjectCollide.Unitize()
-                ObjectCollide *= -(1- (ObjectDistance / iDetectonDistance))**2 #better formula?
-                ObjectCollide.Unitize()
-                self.DesiredVelocity += (ObjectCollide*strength)
-
+            # Mirror Method
+            objectCollide = projectedPt - self.Position
+            objectDistance = objectCollide.Length
+            if objectDistance < 1:
+                self.Alive = False
+                self.Display = "Dead"
+                continue 
+            if objectDistance < iDetectonDistance:
+                objectCollide.Unitize()
+                objectCollide *= -(1- (objectDistance / iDetectonDistance))**2 #better formula?
+                objectCollide.Unitize()
+                self.DesiredVelocity += (objectCollide*strength)
 
     def ComputeWindVector(self, strength):
         iWindSpeed.Unitize()
@@ -132,21 +162,23 @@ class Agent:
                     vector.Rotate(rnd.uniform(valueMin, valueMax), rg.Vector3d(0,0,1))
                 else: 
                     vector.Rotate(rnd.uniform(-valueMin, -valueMax), rg.Vector3d(0,0,1))
-                vector.Unitize()
+                #vector.Unitize()
                 self.DesiredVelocity += (vector*strength)
 
-
-            
+##########################################################################################################          
 
 class Bird(Agent):
     def __init__(self, initialPosition):
         self.Position = initialPosition
         self.Velocity = rg.Vector3d(0.0, 0.0, 0.0)
         self.History = [self.Position]
+        self.Alive = True
+        self.WithoutFood = "Not initialized"
         if rnd.choice([0, 1]) > 0.5:
             self.Rotation = True
         else: 
             self.Rotation = False
+        self.Display = self.WithoutFood
 
 
     def ComputeFoodToNestVector(self):
@@ -199,8 +231,39 @@ class Bird(Agent):
                 getAway.Unitize()
                 self.DesiredVelocity += (getAway*strength)
 
-    def Die(self):
-        pass
+    def ComputeGroupAvoidPredatorVector(self, strength):
+        for predator in predatorSystem.Predators:
+            if predator.ClosestBird == "No one": continue
+            birdIndex = predator.ClosestBird
+            huntedBird = birdSystem.Birds[birdIndex].Position
+            getAway = huntedBird - predator.Position
+            if getAway.Length < iDetectonDistance:
+                groupIndices = list(rg.RTree.Point3dClosestPoints(birdPositions,[huntedBird],iDetectonDistance))
+                allIndices = []
+                for index in groupIndices[0]:
+                    allIndices.append(index)
+                allIndices.append(index)
+                getAway.Unitize()
+                for index in allIndices:
+                    birdSystem.Birds[index].DesiredVelocity += (getAway*strength)
+
+
+### Food
+
+    def DieWithoutFood(self, timeToDeath):
+        if self.WithoutFood == "Not initialized":
+            self.WithoutFood = timeToDeath
+        if self.WithoutFood < 1:
+            self.Alive = False
+            self.Display = "Dead"
+        else:
+            self.WithoutFood -= 1
+
+    def Eat(self, eatDistance, addTimeToDeath):
+        if self.Position.DistanceTo(iFoodSource) < eatDistance:
+            self.WithoutFood += addTimeToDeath
+
+############################################# Update
 
     def Update(self):
         self.Velocity = (1-iAgentVelocity) * self.Velocity + iAgentVelocity * self.DesiredVelocity
@@ -209,36 +272,50 @@ class Bird(Agent):
             self.Velocity *= iSpeed
             self.Position += self.Velocity
             self.History.append(self.Position)
+            if self.Display != "Dead":
+                self.Display = self.WithoutFood
+
+##########################################################################################################
 
 class Predator(Agent):
     def __init__(self, initialPosition):
         self.Position = initialPosition
         self.Velocity = rg.Vector3d(0.0, 0.0, 0.0)
         self.History = [self.Position]
-        self.Hunting = False
+        self.Alive = True
+        self.Hunting = True
+        self.IsHungry = "Not internalized"
+        self.ClosestBird = "No one"
         #True is positive, false is negative rotation
         if rnd.choice([0, 1]) > 0.5:
             self.Rotation = True
         else: 
             self.Rotation = False
+        self.Display = self.IsHungry
     #Defining Vectors
 
-    def SearchClosestBird(self, birds):
-        position = self.Position
-        closestBird = self.Position
-        distance = iPredatorRadius
-        for bird in birds:
-            dis = position.DistanceTo(bird)
-            if dis < distance:
-                closestBird = bird
-                distance = dis
-        if distance < iPredatorRadius:
-            targetVec = closestBird - self.Position
-            targetVec.Unitize()
-            self.DesiredVelocity += (targetVec * iPredatorSpeed)
-            self.Hunting = True
-        else:
-            self.Hunting = False
+### Hunt
+
+    def SearchClosestBird(self):
+        if self.Hunting == True:
+            position = self.Position
+            closestBird = self.Position
+            distance = iPredatorRadius
+            for i in range(len(birdSystem.Birds)):
+                if birdSystem.Birds[i].Alive == True:
+                    dis = position.DistanceTo(birdSystem.Birds[i].Position)
+                    if dis < distance:
+                        closestBird = birdSystem.Birds[i].Position
+                        distance = dis
+                        self.ClosestBird = i
+            if distance < iPredatorRadius:
+                targetVec = closestBird - self.Position
+                targetVec.Unitize()
+                self.DesiredVelocity += targetVec
+                self.Hunting = True
+            else:
+                self.Hunting = False
+                self.ClosestBird = "No one"
 
     def WaitingForFood(self, strength, valueMin, valueMax, upliftStrength):
         if self.Hunting == False: 
@@ -254,17 +331,40 @@ class Predator(Agent):
     def ComputeBirdDensityVector(self):
         pass
 
-    def EatBird(self):
-        pass
+### Eat
+
+    def Hungry(self, amountOfFood, restTime):
+        if self.IsHungry == "Not internalized":
+            self.IsHungry = amountOfFood
+            self.Hunting = True
+        if self.IsHungry <= 0:
+            self.IsHungry -= 1
+            self.Hunting = False
+        if self.IsHungry == -(restTime):
+            self.IsHungry = amountOfFood
+            self.Hunting = True
+
+    def EatBird(self, eatDistance):
+        if self.IsHungry > 0:
+            if self.ClosestBird != "No one":
+                if self.Position.DistanceTo(birdSystem.Birds[self.ClosestBird].Position) < eatDistance:
+                    birdSystem.Birds[self.ClosestBird].Alive = False
+                    birdSystem.Birds[self.ClosestBird].Display = "Dead"
+                    self.IsHungry -= 1
+
+############################################# Update
 
     def Update(self):
         self.Velocity = (1-iPredatorVelocity) * self.Velocity + iPredatorVelocity * self.DesiredVelocity
         if (self.Velocity.Length > 0.1):
             self.Velocity.Unitize()
-            self.Velocity *= iSpeed
+            self.Velocity *= iPredatorSpeed
             self.Position += self.Velocity
             self.History.append(self.Position)
+            if self.Display != "Dead":
+                self.Display = self.IsHungry
 
+##########################################################################################################
 
 #Initialize BirdSystem & PredatorSystem
 if iEnabled == True or iReset:
@@ -277,19 +377,31 @@ if iEnabled == True or iReset:
 
 birdHistory = []
 birdPositions = []
+birdTag = []
+
 predatorHistory = []
 predatorPositions = []
-
-for bird in birdSystem.Birds:
-    birdPositions.append(bird.Position)
-    birdHistory.append(rg.PolylineCurve(bird.History))
+predatorTag = []
 
 for predator in predatorSystem.Predators:
     predatorPositions.append(predator.Position)
-    predatorHistory.append(rg.PolylineCurve(predator.History))
+    #predatorHistory.append(rg.PolylineCurve(predator.History))
+    predatorHistory.append(rg.NurbsCurve.Create(False, 3, predator.History)) 
+    predatorTag.append(predator.Display)
+
+
+for bird in birdSystem.Birds:
+    birdPositions.append(bird.Position)
+    #birdHistory.append(rg.PolylineCurve(bird.History))
+    birdHistory.append(rg.NurbsCurve.Create(False, 3, bird.History))
+    birdTag.append(bird.Display)
+
+
 
 oBirdHistory = birdHistory
 oBirdPositions = birdPositions
+oBirdTag = birdTag
 
 oPredatorHistory = predatorHistory
 oPredatorPositions = predatorPositions
+oPredatorTag = predatorTag
