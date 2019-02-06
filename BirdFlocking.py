@@ -20,9 +20,11 @@ import Rhino.Geometry as rg
 import random as rnd
 import math
 
-class EnvironmentBoundary:
-    def __init__():
-        pass
+
+class EnvironmentSystem:
+    def __init__(self):
+        self.Wind = rg.Vector3d(rnd.uniform(-1.0, 1.0), rnd.uniform(-1.0, 1.0), 0.0)
+
 
     def CreateBoundaryBox(self):
         pass
@@ -35,6 +37,25 @@ class EnvironmentBoundary:
 
     def CreateWindGradient(self):
         pass
+    def ComputeRandomVector(self):
+        pass
+
+    def RandomWindVector(self):
+        randomVecWind = rg.Vector3d(rnd.uniform(-1.0, 1.0), rnd.uniform(-1.0, 1.0), 0.0)
+        #newVecWind = rg.Vector3d.Rotate(self.Wind, rnd.uniform(0.1, 1), rg.Vector3d(0,0,1))
+        newVecWind = (8/10) * self.Wind + (2/10) * randomVecWind
+        newVecWind.Unitize()
+        self.Wind = newVecWind
+
+    def RandomVectorLength(self):
+        newVecWind = self.Wind * rnd.uniform(self.Wind.Length/2, self.Wind.Length*1.5)
+        self.Wind = newVecWind
+       
+
+    def Update(self):
+        self.RandomWindVector()
+        self.RandomVectorLength()
+
 
 
 class BirdSystem:
@@ -106,11 +127,7 @@ class Agent:
                 ObjectCollide.Unitize()
                 ObjectCollide *= -(1- (ObjectDistance / iDetectonDistance))**2*10*iCollideStrength #better formula?
                 self.DesiredVelocity += ObjectCollide
-
-
-    def ComputeWindVector(self):
-        self.DesiredVelocity += iWindSpeed
-
+  
     def ComputeUpliftVector(self):
        # uplift = EnvironmentBoundary.CreateUpliftArea()
         for i in range(len(iUpliftArea)):
@@ -118,6 +135,11 @@ class Agent:
             if testInside == True:
                 upliftVector = rg.Vector3d(0.0, 0.0, iUpliftStrength[i]) 
                 self.DesiredVelocity += upliftVector
+
+
+    def ComputeWindVector(self):
+        self.DesiredVelocity += environmentSystem.Wind * iWindStrength
+        
 
     def TestUpliftRevolveVector(self, value, valueMin, valueMax):
         for i in range(len(testUpliftArea)):
@@ -267,9 +289,13 @@ class Predator(Agent):
 #Initialize BirdSystem & PredatorSystem
 if iEnabled == True or iReset:
     if iReset or "birdSystem" not in globals():
+        environmentSystem = EnvironmentSystem()
         birdSystem = BirdSystem(iAgentCount)
         predatorSystem = PredatorSystem(iPredatorCount)
+
+       
     else: 
+        environmentSystem.Update()
         birdSystem.Update()
         predatorSystem.Update()
 
@@ -291,3 +317,4 @@ oBirdPositions = birdPositions
 
 oPredatorHistory = predatorHistory
 oPredatorPositions = predatorPositions
+oWind = environmentSystem.Wind
