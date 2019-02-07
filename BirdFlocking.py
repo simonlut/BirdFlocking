@@ -19,9 +19,10 @@ import Rhino.Geometry as rg
 import random as rnd
 import math
 
-class EnvironmentBoundary:
-    def __init__():
-        pass
+class EnvironmentSystem:
+    def __init__(self):
+        self.Wind = rg.Vector3d(rnd.uniform(-1.0, 1.0), rnd.uniform(-1.0, 1.0), 0.0)
+
 
     def CreateBoundaryBox(self):
         pass
@@ -34,6 +35,24 @@ class EnvironmentBoundary:
 
     def CreateWindGradient(self):
         pass
+    def ComputeRandomVector(self):
+        pass
+
+    def RandomWindVector(self):
+        randomVecWind = rg.Vector3d(rnd.uniform(-1.0, 1.0), rnd.uniform(-1.0, 1.0), 0.0)
+        #newVecWind = rg.Vector3d.Rotate(self.Wind, rnd.uniform(0.1, 1), rg.Vector3d(0,0,1))
+        newVecWind = (8/10) * self.Wind + (2/10) * randomVecWind
+        newVecWind.Unitize()
+        self.Wind = newVecWind
+
+    def RandomVectorLength(self):
+        newVecWind = self.Wind * rnd.uniform(self.Wind.Length/2, self.Wind.Length*1.5)
+        self.Wind = newVecWind
+        print self.Wind.Length
+
+    def Update(self):
+        self.RandomWindVector()
+        self.RandomVectorLength()
 
 ##########################################################################################################
 
@@ -48,13 +67,13 @@ class BirdSystem:
     def Update(self):
         for bird in self.Birds:
             if bird.Alive == False: continue 
-            bird.DieWithoutFood(500)
+            bird.DieWithoutFood(700)
             bird.Eat(50, 5)
             bird.ComputeRandomMovement(0.05)
-            bird.ComputeAvoidGroundFloor(5, 20)
+            bird.ComputeAvoidGroundFloor(10, 20)
             bird.ComputeNestToFoodVector()
             bird.ComputeFlockingVector()
-            bird.ComputeWindVector(30)
+            bird.ComputeWindVector()
             #bird.ComputeAvoidObstacleVector() #Not used!!!
             bird.ComputeAvoidBrepsVector(100)
             #bird.ComputeUpliftVector()  #Not used!!!
@@ -76,7 +95,7 @@ class PredatorSystem:
     def Update(self):
         for predator in self.Predators:
             if predator.Alive == False: continue
-            predator.Hungry(1, 200)
+            predator.Hungry(3, 200)
             predator.EatBird(5)
             predator.ComputeRandomMovement(0.2)
             predator.ComputeAvoidGroundFloor(1.0, 10)
@@ -84,7 +103,7 @@ class PredatorSystem:
             predator.WaitingForFood(2.0, 0.4, 0.5, 0.01)
             predator.ComputeAvoidBrepsVector(100)
             predator.ComputeUpliftRevolveVector(0.05, 0.4, 0.5)
-            predator.ComputeWindVector(0.1)
+            predator.ComputeWindVector()
         for predator in self.Predators:
             if predator.Alive == False: continue
             predator.Update()
@@ -138,9 +157,8 @@ class Agent:
                 objectCollide.Unitize()
                 self.DesiredVelocity += (objectCollide*strength)
 
-    def ComputeWindVector(self, strength):
-        iWindSpeed.Unitize()
-        self.DesiredVelocity += (iWindSpeed*strength)
+    def ComputeWindVector(self):
+        self.DesiredVelocity += environmentSystem.Wind * iWindSpeed
 
     def ComputeUpliftVector(self, strength): #Not used!!!!
         for i in range(len(iUpliftArea)):
@@ -284,7 +302,7 @@ class Predator(Agent):
         self.History = [self.Position]
         self.Alive = True
         self.Hunting = True
-        self.IsHungry = "Not internalized"
+        self.IsHungry = "Not initialized"
         self.ClosestBird = "No one"
         #True is positive, false is negative rotation
         if rnd.choice([0, 1]) > 0.5:
@@ -334,7 +352,7 @@ class Predator(Agent):
 ### Eat
 
     def Hungry(self, amountOfFood, restTime):
-        if self.IsHungry == "Not internalized":
+        if self.IsHungry == "Not initialized":
             self.IsHungry = amountOfFood
             self.Hunting = True
         if self.IsHungry <= 0:
@@ -369,9 +387,11 @@ class Predator(Agent):
 #Initialize BirdSystem & PredatorSystem
 if iEnabled == True or iReset:
     if iReset or "birdSystem" not in globals():
+        environmentSystem = EnvironmentSystem()
         birdSystem = BirdSystem(iAgentCount)
         predatorSystem = PredatorSystem(iPredatorCount)
     else: 
+        environmentSystem.Update()
         birdSystem.Update()
         predatorSystem.Update()
 
@@ -397,6 +417,7 @@ for bird in birdSystem.Birds:
     birdTag.append(bird.Display)
 
 
+oWind = environmentSystem.Wind
 
 oBirdHistory = birdHistory
 oBirdPositions = birdPositions
@@ -405,3 +426,4 @@ oBirdTag = birdTag
 oPredatorHistory = predatorHistory
 oPredatorPositions = predatorPositions
 oPredatorTag = predatorTag
+
