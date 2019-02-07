@@ -25,6 +25,43 @@ class EnvironmentSystem:
         self.WindSpeed = iWindSpeed
         self.Wind.Unitize()
         self.Wind *= self.WindSpeed
+        self.Food = "Not initialized"
+
+    def SpawnFood(self, amount, initFood):
+        if self.Food == "Not initialized":
+            self.Food = []
+            self.AmountFood = []
+            for i in range(amount):
+                newLocation = rnd.choice(iFoodSpawnLocations)
+                self.Food.append(newLocation)
+                self.AmountFood.append(initFood)
+        if len(self.Food) < amount/2:
+                newLocation = rnd.choice(range(len(iFoodSpawnLocations)))
+                self.Food.append(newLocation)
+                self.AmountFood.append(initFood)
+
+    def InitializeFood(self, amount): #Not used
+        if self.AmountFood == "Not initialized":
+            self.AmountFood = []
+            for food in self.Food:
+                self.AmountFood.append(amount)
+        for i in range(len(self.AmountFood)):
+            if self.AmountFood[i] <= 0:
+                del self.AmountFood[i]
+                del self.Food[i]
+
+    def ComputeFoodLive(self, eatDistance):
+        if "birdSystem" in globals():
+            _birdPositions = []
+            for bird in birdSystem.Birds:
+                _birdPositions.append(bird.Position)
+            for i in range(len(self.Food)):
+                closestBirds = list(rg.RTree.Point3dClosestPoints(_birdPositions,[self.Food[i]], eatDistance))
+                self.AmountFood[i] -= len(closestBirds[0])
+                if self.AmountFood[i] <= 0:
+                    del self.AmountFood[i]
+                    del self.Food[i]      
+
 
     def CreateBoundaryBox(self):
         pass
@@ -67,6 +104,8 @@ class EnvironmentSystem:
         #self.RandomVectorLength
         self.RotateWind(0.05)
         self.ComputeWindSpeed(0.1)
+        self.SpawnFood(2, 20)
+        self.ComputeFoodLive(5)
 
 ##########################################################################################################
 
@@ -82,10 +121,11 @@ class BirdSystem:
         for bird in self.Birds:
             if bird.Alive == False: continue 
             bird.DieWithoutFood(700)
+            bird.FindClosestFood()
             bird.Eat(50, 5)
             bird.ComputeRandomMovement(0.05)
-            bird.ComputeAvoidGroundFloor(10, 20)
-            bird.ComputeNestToFoodVector(10)
+            bird.ComputeAvoidGroundFloor(10, 30)
+            bird.ComputeToFoodVector(10)
             bird.ComputeFlockingVector()
             bird.ComputeWindVector(0.2)
             #bird.ComputeAvoidObstacleVector() #Not used!!!
@@ -112,7 +152,7 @@ class PredatorSystem:
             predator.Hungry(3, 200)
             predator.EatBird(5)
             predator.ComputeRandomMovement(0.2)
-            predator.ComputeAvoidGroundFloor(1.0, 10)
+            predator.ComputeAvoidGroundFloor(1.0, 20)
             predator.SearchClosestBird()
             predator.WaitingForFood(2.0, 0.4, 0.5, 0.01)
             predator.ComputeAvoidBrepsVector(50)
@@ -217,11 +257,22 @@ class Bird(Agent):
     def ComputeFoodToNestVector(self):
         pass
 
-    def ComputeNestToFoodVector(self, strength):
-        toFood = iFoodSource - self.Position
-        toFood.Unitize()
-        toFood *= strength
-        self.DesiredVelocity += toFood
+    def FindClosestFood(self):
+        closestFood = 0
+        foodDistance = 10000
+        for i in range(len(environmentSystem.Food)):
+            if self.Position.DistanceTo(environmentSystem.Food[i]) < foodDistance:
+                closestFood = environmentSystem.Food[i]
+                foodDistance = self.Position.DistanceTo(environmentSystem.Food[i])
+        self.ClosestFood = closestFood
+
+    def ComputeToFoodVector(self, strength):
+        #toFood = iFoodSource - self.Position
+        if self.ClosestFood != 0:
+            toFood = self.ClosestFood - self.Position
+            toFood.Unitize()
+            toFood *= strength
+            self.DesiredVelocity += toFood
 
     def ComputeFlockingVector(self):
         #Separation
@@ -293,8 +344,9 @@ class Bird(Agent):
             self.WithoutFood -= 1
 
     def Eat(self, eatDistance, addTimeToDeath):
-        if self.Position.DistanceTo(iFoodSource) < eatDistance:
-            self.WithoutFood += addTimeToDeath
+        if self.ClosestFood != 0:
+            if self.Position.DistanceTo(self.ClosestFood) < eatDistance:
+                self.WithoutFood += addTimeToDeath
 
 ############################################# Update
 
