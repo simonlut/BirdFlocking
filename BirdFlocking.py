@@ -22,7 +22,9 @@ import math
 class EnvironmentSystem:
     def __init__(self):
         self.Wind = rg.Vector3d(rnd.uniform(-1.0, 1.0), rnd.uniform(-1.0, 1.0), 0.0)
-
+        self.WindSpeed = iWindSpeed
+        self.Wind.Unitize()
+        self.Wind *= self.WindSpeed
 
     def CreateBoundaryBox(self):
         pass
@@ -38,21 +40,33 @@ class EnvironmentSystem:
     def ComputeRandomVector(self):
         pass
 
-    def RandomWindVector(self):
+    def RotateWind(self, strength):
+        newWind = self.Wind
+        rotation = rnd.uniform(-strength, strength)
+        newWind.Rotate(rotation, rg.Vector3d(0,0,1))
+        self.Wind = newWind
+
+    def ComputeWindSpeed(self, strength):
+        change = rnd.uniform(-strength, strength)
+        self.WindSpeed += change
+
+    def RandomWindVector(self): #Not used
         randomVecWind = rg.Vector3d(rnd.uniform(-1.0, 1.0), rnd.uniform(-1.0, 1.0), 0.0)
         #newVecWind = rg.Vector3d.Rotate(self.Wind, rnd.uniform(0.1, 1), rg.Vector3d(0,0,1))
         newVecWind = (8/10) * self.Wind + (2/10) * randomVecWind
         newVecWind.Unitize()
         self.Wind = newVecWind
 
-    def RandomVectorLength(self):
+    def RandomVectorLength(self):#Not used
         newVecWind = self.Wind * rnd.uniform(self.Wind.Length/2, self.Wind.Length*1.5)
         self.Wind = newVecWind
         print self.Wind.Length
 
     def Update(self):
-        self.RandomWindVector()
-        self.RandomVectorLength()
+        #self.RandomWindVector()
+        #self.RandomVectorLength
+        self.RotateWind(0.05)
+        self.ComputeWindSpeed(0.1)
 
 ##########################################################################################################
 
@@ -71,13 +85,13 @@ class BirdSystem:
             bird.Eat(50, 5)
             bird.ComputeRandomMovement(0.05)
             bird.ComputeAvoidGroundFloor(10, 20)
-            bird.ComputeNestToFoodVector()
+            bird.ComputeNestToFoodVector(10)
             bird.ComputeFlockingVector()
-            bird.ComputeWindVector()
+            bird.ComputeWindVector(0.2)
             #bird.ComputeAvoidObstacleVector() #Not used!!!
             bird.ComputeAvoidBrepsVector(100)
             #bird.ComputeUpliftVector()  #Not used!!!
-            bird.ComputeUpliftRevolveVector(1.0, 3.0, 4.0)
+            bird.ComputeUpliftRevolveVector(0.5, 3.0, 4.0)
             bird.ComputeGroupAvoidPredatorVector(10)
             bird.ComputeAvoidPredatorVector(10)
         for bird in self.Birds:
@@ -101,9 +115,9 @@ class PredatorSystem:
             predator.ComputeAvoidGroundFloor(1.0, 10)
             predator.SearchClosestBird()
             predator.WaitingForFood(2.0, 0.4, 0.5, 0.01)
-            predator.ComputeAvoidBrepsVector(100)
+            predator.ComputeAvoidBrepsVector(50)
             predator.ComputeUpliftRevolveVector(0.05, 0.4, 0.5)
-            predator.ComputeWindVector()
+            predator.ComputeWindVector(0.05)
         for predator in self.Predators:
             if predator.Alive == False: continue
             predator.Update()
@@ -154,11 +168,12 @@ class Agent:
             if objectDistance < iDetectonDistance:
                 objectCollide.Unitize()
                 objectCollide *= -(1- (objectDistance / iDetectonDistance))**2 #better formula?
+                #objectCollide *= (iDetectonDistance / objectDistance - 0.99)**2
                 objectCollide.Unitize()
                 self.DesiredVelocity += (objectCollide*strength)
 
-    def ComputeWindVector(self):
-        self.DesiredVelocity += environmentSystem.Wind * iWindSpeed
+    def ComputeWindVector(self, strength):
+        self.DesiredVelocity += (environmentSystem.Wind * strength)
 
     def ComputeUpliftVector(self, strength): #Not used!!!!
         for i in range(len(iUpliftArea)):
@@ -202,10 +217,10 @@ class Bird(Agent):
     def ComputeFoodToNestVector(self):
         pass
 
-    def ComputeNestToFoodVector(self):
+    def ComputeNestToFoodVector(self, strength):
         toFood = iFoodSource - self.Position
         toFood.Unitize()
-        toFood *= iFoodStrength**2
+        toFood *= strength
         self.DesiredVelocity += toFood
 
     def ComputeFlockingVector(self):
