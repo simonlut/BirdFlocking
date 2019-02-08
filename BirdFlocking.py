@@ -114,8 +114,11 @@ class BirdSystem:
     #Realtime flocking optimization using R-Tree system.
     def __init__(self,agentCount):
         self.Birds = []
+        self.Radius = 10
+        self.MinCount = agentCount / 2
         for i in range(0,agentCount):
-            self.Birds.append(Bird(rg.Point3d(rnd.uniform(0.0,50.0),rnd.uniform(0.0,50.0),rnd.uniform(0.0,50.0))))
+            location = rnd.choice(iAgentSpawnLocations)
+            self.Birds.append(Bird(rg.Point3d(rnd.uniform(location.X - self.Radius,location.X + self.Radius),rnd.uniform(location.Y - self.Radius,location.Y + self.Radius),rnd.uniform(location.Z,location.Z + self.Radius*2))))
 
     def Update(self):
         for bird in self.Birds:
@@ -137,14 +140,19 @@ class BirdSystem:
         for bird in self.Birds:
             if bird.Alive == False: continue 
             bird.Update()
+        bird.SpawnNewBird(iAgentSpawnLocations, 5)
 
 ##########################################################################################################
 
 class PredatorSystem:
     def __init__(self, predatorCount):
         self.Predators = []
+        self.Radius = 10
+        self.Count = len(self.Predators)
+        self.MinCount = predatorCount / 2
         for i in range(0,predatorCount):
-            self.Predators.append(Predator(rg.Point3d(rnd.uniform(0.0,50.0),rnd.uniform(0.0,50.0),rnd.uniform(0.0,50.0))))
+            location = rnd.choice(iPredatorSpawnLocations)
+            self.Predators.append(Predator(rg.Point3d(rnd.uniform(location.X - self.Radius,location.X + self.Radius),rnd.uniform(location.Y - self.Radius,location.Y + self.Radius),rnd.uniform(location.Z,location.Z + self.Radius*2))))
 
     def Update(self):
         for predator in self.Predators:
@@ -154,13 +162,15 @@ class PredatorSystem:
             predator.ComputeRandomMovement(0.2)
             predator.ComputeAvoidGroundFloor(1.0, 20)
             predator.SearchClosestBird()
-            predator.WaitingForFood(2.0, 0.4, 0.5, 0.01)
+            predator.WaitingForFood(2.0, 0.1, 0.2, 0.01)
             predator.ComputeAvoidBrepsVector(50)
             predator.ComputeUpliftRevolveVector(0.05, 0.4, 0.5)
-            predator.ComputeWindVector(0.05)
+            predator.ComputeWindVector(0.01)
         for predator in self.Predators:
             if predator.Alive == False: continue
             predator.Update()
+        predator.SpawnNewPredator(iPredatorSpawnLocations)
+
 
 ##########################################################################################################
 
@@ -169,8 +179,6 @@ class Agent:
         self.Position = initialPosition
         self.Velocity = rg.Vector3d(0.0, 0.0, 0.0)
 
-    def SpawnNewAgents(self, minAmount):
-        pass
 
     def ComputeRandomMovement(self, value):
         randomVec = rg.Vector3d(rnd.uniform(-value, value),rnd.uniform(-value, value),rnd.uniform(-value, value))
@@ -252,6 +260,17 @@ class Bird(Agent):
         else: 
             self.Rotation = False
         self.Display = self.WithoutFood
+
+    def SpawnNewBird(self, locations, amount):
+        aliveCount = 0
+        for bird in birdSystem.Birds:
+            if bird.Alive == True:
+                aliveCount += 1
+        if aliveCount < birdSystem.MinCount: 
+            location = rnd.choice(locations)
+            radius = birdSystem.Radius
+            for i in range(amount):
+                birdSystem.Birds.append(Bird(rg.Point3d(rnd.uniform(location.X - radius,location.X + radius),rnd.uniform(location.Y - radius,location.Y + radius),rnd.uniform(location.Z,location.Z + radius*2))))
 
 
     def ComputeFoodToNestVector(self):
@@ -378,6 +397,16 @@ class Predator(Agent):
             self.Rotation = False
         self.Display = self.IsHungry
     #Defining Vectors
+
+    def SpawnNewPredator(self, locations):
+        aliveCount = 0
+        for predator in predatorSystem.Predators:
+            if predator.Alive == True:
+                aliveCount += 1
+        if aliveCount < predatorSystem.MinCount: 
+            location = rnd.choice(locations)
+            radius = birdSystem.Radius
+            predatorSystem.Predators.append(Predator(rg.Point3d(rnd.uniform(location.X - radius,location.X + radius),rnd.uniform(location.Y - radius,location.Y + radius),rnd.uniform(location.Z,location.Z + radius*2))))
 
 ### Hunt
 
