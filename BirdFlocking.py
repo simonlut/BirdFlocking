@@ -14,6 +14,10 @@
 #Set up the environment properties (Boundaries & obstacles)
 #Set up a wind map
 
+<<<<<<< HEAD
+=======
+#Simon Branch
+>>>>>>> Simon
 
 import Rhino.Geometry as rg
 import random as rnd
