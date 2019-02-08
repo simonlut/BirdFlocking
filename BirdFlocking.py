@@ -129,13 +129,12 @@ class BirdSystem:
             bird.ComputeRandomMovement(0.05)
             bird.ComputeAvoidGroundFloor(10, 30)
             bird.ComputeToFoodVector(7)
-            bird.ComputeFlockingVector(10,10)
+            bird.ComputeFlockingVector(iCohesionStrength, iAlignStrength)
             bird.ComputeWindVector(iWindSpeed)
-            #bird.ComputeAvoidObstacleVector() #Not used!!!
             bird.ComputeAvoidBrepsVector(100)
             #bird.ComputeUpliftVector()  #Not used!!!
             bird.ComputeUpliftRevolveVector(0.5, 3.0, 4.0)
-            #bird.ComputeGroupAvoidPredatorVector(10)
+            #bird.ComputeGroupAvoidPredatorVector(10) #Not used
             bird.ComputeAvoidPredatorVector(10)
         for bird in self.Birds:
             if bird.Alive == False: continue 
@@ -183,15 +182,6 @@ class Agent:
     def ComputeRandomMovement(self, value):
         randomVec = rg.Vector3d(rnd.uniform(-value, value),rnd.uniform(-value, value),rnd.uniform(-value, value))
         self.DesiredVelocity = randomVec
-
-    def ComputeAvoidObstacleVector(self, strength): #Not used!!!!
-        ObjectCollide = iObstacle - self.Position
-        ObjectDistance = ObjectCollide.Length     
-        if ObjectDistance < (iObstacleSize + iDetectonDistance):
-            ObjectCollide.Unitize()
-            ObjectCollide *= -(1- (ObjectDistance / iDetectonDistance))**2*10*iCollideStrength
-            ObjectCollide.Unitize()
-            self.DesiredVelocity += (ObjectCollide*strength)
 
     def ComputeAvoidGroundFloor(self, strength, detectionLength):
         if self.Position.Z < 0.5:
@@ -300,15 +290,16 @@ class Bird(Agent):
         for bird in birdSystem.Birds:
             _birdPositions.append(bird.Position)
         
+        #Get current velocities
         _birdVelocities = []
         for bird in birdSystem.Birds:
             _birdVelocities.append(bird.Velocity)
 
-        #Rtree -> get closestbirds to current bird
+        #Rtree -> get closest birds to current bird
         ClosestBirds = list(rg.RTree.Point3dClosestPoints(_birdPositions,[self.Position],iDetectonDistance))
 
-        a = rg.Vector3d(0.0,0.0,0.0)
-        b = rg.Vector3d(0.0,0.0,0.0)
+        CohesionVec = rg.Vector3d(0.0,0.0,0.0)
+        VelVec = rg.Vector3d(0.0,0.0,0.0)
 
         for closebird in ClosestBirds[0]:
             if _birdPositions[closebird] == self.Position: continue #Skip self
@@ -316,7 +307,9 @@ class Bird(Agent):
             distance = goToBird.Length #Calculate distance between closestbirds
             
             #Align
-            b += _birdVelocities[closebird]
+            BirdVel = _birdVelocities[closebird]
+            BirdVel.Unitize()
+            VelVec += BirdVel
 
             #Separate
             if (distance < iSeparationDistance):
@@ -324,21 +317,31 @@ class Bird(Agent):
                 getAwayDistance = getAway.Length
                 getAway.Unitize()
                 getAway *= (1 - (getAwayDistance/iSeparationDistance))**2
-                a += getAway
+                CohesionVec += getAway
             
             #Cohesion
             else:
                 goToBird.Unitize()
-                goToBird *= (iSeparationStrength / (distance + 1))**2
-                a += goToBird
+                goToBird *= (CohesionStrength / (distance + 1))**2
+                CohesionVec += goToBird
             
-            CohesionVelocity = a/ len(ClosestBirds[0])*CohesionStrength #AverageCohesion vector
-            AlignVelocity = b / len(ClosestBirds[0])*AlignStrength #Average Velocities
-            self.DesiredVelocity += (CohesionVelocity + AlignVelocity)/2.0 
+            CohesionVelocity = CohesionVec/ len(ClosestBirds[0])*CohesionStrength   #AverageCohesion vector
+            AlignVelocity = VelVec / len(ClosestBirds[0])*AlignStrength             #Average Velocities
+            self.DesiredVelocity += (CohesionVelocity + AlignVelocity)/2.0          
 
     def ComputeAvoidPredatorVector(self, strength):
+        
+        #Get current positions predator
+        _PredatorPos = []
         for predator in predatorSystem.Predators:
-            getAway = self.Position - predator.Position 
+            _PredatorPos.append(predator.Position)
+        
+        #FindClosest predators using RTree's
+        ClosestPredators = list(rg.RTree.Point3dClosestPoints(_PredatorPos,[self.Position],iDetectonDistance*1.5))
+       
+        #Getaway from predator vector
+        for closepredator in ClosestPredators[0]:
+            getAway = self.Position - _PredatorPos[closepredator]
             distance = getAway.Length
             if distance < iDetectonDistance*2:
                 getAway.Unitize()
