@@ -14,10 +14,6 @@
 #Set up the environment properties (Boundaries & obstacles)
 #Set up a wind map
 
-<<<<<<< HEAD
-=======
-#Simon Branch
->>>>>>> Simon
 
 import Rhino.Geometry as rg
 import random as rnd
@@ -132,14 +128,14 @@ class BirdSystem:
             bird.Eat(50, 5)
             bird.ComputeRandomMovement(0.05)
             bird.ComputeAvoidGroundFloor(10, 30)
-            bird.ComputeToFoodVector(10)
-            bird.ComputeFlockingVector()
-            bird.ComputeWindVector(0.2)
+            bird.ComputeToFoodVector(7)
+            bird.ComputeFlockingVector(10,10)
+            bird.ComputeWindVector(iWindSpeed)
             #bird.ComputeAvoidObstacleVector() #Not used!!!
             bird.ComputeAvoidBrepsVector(100)
             #bird.ComputeUpliftVector()  #Not used!!!
             bird.ComputeUpliftRevolveVector(0.5, 3.0, 4.0)
-            bird.ComputeGroupAvoidPredatorVector(10)
+            #bird.ComputeGroupAvoidPredatorVector(10)
             bird.ComputeAvoidPredatorVector(10)
         for bird in self.Birds:
             if bird.Alive == False: continue 
@@ -297,62 +293,72 @@ class Bird(Agent):
             toFood *= strength
             self.DesiredVelocity += toFood
 
-    def ComputeFlockingVector(self):
-        #Separation
+    def ComputeFlockingVector(self, CohesionStrength, AlignStrength):
 
-        #Alignment
-
-        #Cohesion
-        #Try to find birds of same colour and attract to them up to a certain seperation distance.
-        #If to close -> get away until seperationdistance = true
-        
-
+        #Get current bird positions
         _birdPositions = []
         for bird in birdSystem.Birds:
             _birdPositions.append(bird.Position)
+        
+        _birdVelocities = []
+        for bird in birdSystem.Birds:
+            _birdVelocities.append(bird.Velocity)
 
+        #Rtree -> get closestbirds to current bird
         ClosestBirds = list(rg.RTree.Point3dClosestPoints(_birdPositions,[self.Position],iDetectonDistance))
 
+        a = rg.Vector3d(0.0,0.0,0.0)
+        b = rg.Vector3d(0.0,0.0,0.0)
+
         for closebird in ClosestBirds[0]:
-            if _birdPositions[closebird] == self.Position: continue
-            goToBird = _birdPositions[closebird] - self.Position
-            distance = goToBird.Length
-                       
+            if _birdPositions[closebird] == self.Position: continue #Skip self
+            goToBird = _birdPositions[closebird] - self.Position #Get vector between current bird and closestbirds
+            distance = goToBird.Length #Calculate distance between closestbirds
+            
+            #Align
+            b += _birdVelocities[closebird]
+
+            #Separate
             if (distance < iSeparationDistance):
                 getAway = self.Position - _birdPositions[closebird]
                 getAwayDistance = getAway.Length
                 getAway.Unitize()
-                getAway *= iSeparationStrength * (1 - (getAwayDistance/iSeparationDistance))**2
-                self.DesiredVelocity += getAway
-
+                getAway *= (1 - (getAwayDistance/iSeparationDistance))**2
+                a += getAway
+            
+            #Cohesion
             else:
                 goToBird.Unitize()
                 goToBird *= (iSeparationStrength / (distance + 1))**2
-                self.DesiredVelocity += goToBird
+                a += goToBird
             
+            CohesionVelocity = a/ len(ClosestBirds[0])*CohesionStrength #AverageCohesion vector
+            AlignVelocity = b / len(ClosestBirds[0])*AlignStrength #Average Velocities
+            self.DesiredVelocity += (CohesionVelocity + AlignVelocity)/2.0 
+
     def ComputeAvoidPredatorVector(self, strength):
         for predator in predatorSystem.Predators:
             getAway = self.Position - predator.Position 
             distance = getAway.Length
-            if distance < iDetectonDistance:
+            if distance < iDetectonDistance*2:
                 getAway.Unitize()
                 self.DesiredVelocity += (getAway*strength)
 
-    def ComputeGroupAvoidPredatorVector(self, strength):
-        for predator in predatorSystem.Predators:
-            if predator.ClosestBird == "No one": continue
-            birdIndex = predator.ClosestBird
-            huntedBird = birdSystem.Birds[birdIndex].Position
-            getAway = huntedBird - predator.Position
-            if getAway.Length < iDetectonDistance:
-                groupIndices = list(rg.RTree.Point3dClosestPoints(birdPositions,[huntedBird],iDetectonDistance))
-                allIndices = []
-                for index in groupIndices[0]:
-                    allIndices.append(index)
-                allIndices.append(index)
-                getAway.Unitize()
-                for index in allIndices:
-                    birdSystem.Birds[index].DesiredVelocity += (getAway*strength)
+    #def ComputeGroupAvoidPredatorVector(self, strength):
+    #    for predator in predatorSystem.Predators:
+    #        if predator.ClosestBird == "No one": continue
+    #        birdIndex = predator.ClosestBird
+    #        huntedBird = birdSystem.Birds[birdIndex].Position
+    #        getAway = huntedBird - predator.Position
+    #        if getAway.Length < iDetectonDistance:
+    #            groupIndices = list(rg.RTree.Point3dClosestPoints(birdPositions,[huntedBird],iDetectonDistance))
+    #            allIndices = []
+    #            for index in groupIndices[0]:
+    #                allIndices.append(index)
+    #            allIndices.append(index)
+    #            getAway.Unitize()
+    #            for index in allIndices:
+    #                birdSystem.Birds[index].DesiredVelocity += (getAway*strength)
 
 
 ### Food
@@ -502,6 +508,7 @@ birdTag = []
 predatorHistory = []
 predatorPositions = []
 predatorTag = []
+birdVelocities = []
 
 for predator in predatorSystem.Predators:
     predatorPositions.append(predator.Position)
@@ -513,6 +520,7 @@ for predator in predatorSystem.Predators:
 for bird in birdSystem.Birds:
     birdPositions.append(bird.Position)
     #birdHistory.append(rg.PolylineCurve(bird.History))
+    birdVelocities.append(bird.Velocity)
     birdHistory.append(rg.NurbsCurve.Create(False, 3, bird.History))
     birdTag.append(bird.Display)
 
@@ -526,4 +534,4 @@ oBirdTag = birdTag
 oPredatorHistory = predatorHistory
 oPredatorPositions = predatorPositions
 oPredatorTag = predatorTag
-
+obirdVelocities = birdVelocities
