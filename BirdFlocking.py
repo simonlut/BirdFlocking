@@ -5,16 +5,6 @@
 # 3D Printing Agent-Based BirdFlocking
 ###############################################
 
-
-#Todo : 
-#Multiple birds flocks
-#Predator needs to be able to eat the birds
-#Birds should have the behavior to get back to their nests
-#Predator should be able to idle after eating a bird (When not hungry anymore)
-#Set up the environment properties (Boundaries & obstacles)
-#Set up a wind map
-
-
 import Rhino.Geometry as rg
 import random as rnd
 import math
@@ -27,20 +17,47 @@ class EnvironmentSystem:
         self.Wind *= self.WindSpeed
         self.Food = "Not initialized"
 
-    def SpawnFood(self, amount, initFood):
+    #Spawns food at different locations - Not used
+    def OLDSpawnFood(self, amountSpawns, initFood):
         if self.Food == "Not initialized":
             self.Food = []
             self.AmountFood = []
-            for i in range(amount):
-                newLocation = rnd.choice(iFoodSpawnLocations)
-                self.Food.append(newLocation)
+            locations = rnd.sample(iFoodSpawnLocations, amountSpawns)
+            for location in locations:
+                self.Food.append(location)
                 self.AmountFood.append(initFood)
-        if len(self.Food) < amount/2:
-                newLocation = rnd.choice(range(len(iFoodSpawnLocations)))
-                self.Food.append(newLocation)
-                self.AmountFood.append(initFood)
+        elif len(self.Food) < amountSpawns:
+            possibleLocations = iFoodSpawnLocations
+            for existingLocation in self.Food:
+                possibleLocations.remove(existingLocation)
+            newLocation = rnd.choice(possibleLocations)
+            self.Food.append(newLocation)
+            self.AmountFood.append(initFood)
 
-    def InitializeFood(self, amount): #Not used
+    def SpawnFood(self, amountSpawns, respawnTime, initFood):
+        if self.Food == "Not initialized":
+            self.Food = iFoodSpawnLocations
+            amountOfFood = []
+            for i in range(amountSpawns):
+                amountOfFood.append(initFood)
+            for i in range(len(self.Food)-amountSpawns):
+                amountOfFood.append(0)
+            rnd.shuffle(amountOfFood)
+            self.AmountFood = amountOfFood
+        else:
+            existing = 0
+            possibleLocations = []
+            for i in range(len(self.AmountFood)):
+                if self.AmountFood[i] > 0:
+                    existing += 1
+                elif self.AmountFood[i] <= (-respawnTime):
+                    possibleLocations.append(i)
+            if existing < amountSpawns and len(possibleLocations) > 0:          
+                newLocation = rnd.choice(possibleLocations)
+                self.AmountFood[newLocation] = initFood
+
+    #Not used
+    def InitializeFood(self, amount): 
         if self.AmountFood == "Not initialized":
             self.AmountFood = []
             for food in self.Food:
@@ -49,8 +66,9 @@ class EnvironmentSystem:
             if self.AmountFood[i] <= 0:
                 del self.AmountFood[i]
                 del self.Food[i]
-
-    def ComputeFoodLive(self, eatDistance):
+    
+    #Not used
+    def OLDComputeFoodLive(self, eatDistance):
         if "birdSystem" in globals():
             _birdPositions = []
             for bird in birdSystem.Birds:
@@ -60,7 +78,21 @@ class EnvironmentSystem:
                 self.AmountFood[i] -= len(closestBirds[0])
                 if self.AmountFood[i] <= 0:
                     del self.AmountFood[i]
-                    del self.Food[i]      
+                    del self.Food[i]   
+
+    #Computes the amount of food left and despawns it if nothing is left
+    def ComputeFoodLive(self, eatDistance):
+        if "birdSystem" in globals():
+            _birdPositions = []
+            for bird in birdSystem.Birds:
+                _birdPositions.append(bird.Position)
+            for i in range(len(self.Food)):
+                if self.AmountFood[i] <= 0:
+                    self.AmountFood[i] -= 1 
+                else: 
+                    closestBirds = list(rg.RTree.Point3dClosestPoints(_birdPositions,[self.Food[i]], eatDistance))
+                    self.AmountFood[i] -= len(closestBirds[0])
+ 
 
 
     def CreateBoundaryBox(self):
@@ -77,35 +109,40 @@ class EnvironmentSystem:
     def ComputeRandomVector(self):
         pass
 
+    #Rotates smoothly the wind
     def RotateWind(self, strength):
         newWind = self.Wind
         rotation = rnd.uniform(-strength, strength)
         newWind.Rotate(rotation, rg.Vector3d(0,0,1))
         self.Wind = newWind
-
+    
+    #Changes smootly the wind strength
     def ComputeWindSpeed(self, strength):
         change = rnd.uniform(-strength, strength)
         self.WindSpeed += change
 
-    def RandomWindVector(self): #Not used
+    #Not used
+    def RandomWindVector(self): 
         randomVecWind = rg.Vector3d(rnd.uniform(-1.0, 1.0), rnd.uniform(-1.0, 1.0), 0.0)
         #newVecWind = rg.Vector3d.Rotate(self.Wind, rnd.uniform(0.1, 1), rg.Vector3d(0,0,1))
         newVecWind = (8/10) * self.Wind + (2/10) * randomVecWind
         newVecWind.Unitize()
         self.Wind = newVecWind
 
-    def RandomVectorLength(self):#Not used
+    #Not used
+    def RandomVectorLength(self):
         newVecWind = self.Wind * rnd.uniform(self.Wind.Length/2, self.Wind.Length*1.5)
         self.Wind = newVecWind
         print self.Wind.Length
 
+    #Updates the environment
     def Update(self):
         #self.RandomWindVector()
         #self.RandomVectorLength
         self.RotateWind(0.05)
         self.ComputeWindSpeed(0.1)
-        self.SpawnFood(2, 20)
-        self.ComputeFoodLive(5)
+        self.SpawnFood(2, 200, 20)
+        self.ComputeFoodLive(10)
 
 ##########################################################################################################
 
@@ -120,12 +157,13 @@ class BirdSystem:
             location = rnd.choice(iAgentSpawnLocations)
             self.Birds.append(Bird(rg.Point3d(rnd.uniform(location.X - self.Radius,location.X + self.Radius),rnd.uniform(location.Y - self.Radius,location.Y + self.Radius),rnd.uniform(location.Z,location.Z + self.Radius*2))))
 
+    #Updates the birds
     def Update(self):
         for bird in self.Birds:
             if bird.Alive == False: continue 
             bird.DieWithoutFood(700)
             bird.FindClosestFood()
-            bird.Eat(50, 5)
+            bird.Eat(10, 5)
             bird.ComputeRandomMovement(0.05)
             bird.ComputeAvoidGroundFloor(10, 30)
             bird.ComputeToFoodVector(10)
@@ -154,6 +192,7 @@ class PredatorSystem:
             location = rnd.choice(iPredatorSpawnLocations)
             self.Predators.append(Predator(rg.Point3d(rnd.uniform(location.X - self.Radius,location.X + self.Radius),rnd.uniform(location.Y - self.Radius,location.Y + self.Radius),rnd.uniform(location.Z,location.Z + self.Radius*2))))
 
+    #Updates the predators
     def Update(self):
         for predator in self.Predators:
             if predator.Alive == False: continue
@@ -179,12 +218,13 @@ class Agent:
         self.Position = initialPosition
         self.Velocity = rg.Vector3d(0.0, 0.0, 0.0)
 
-
+    #Small random vector
     def ComputeRandomMovement(self, value):
         randomVec = rg.Vector3d(rnd.uniform(-value, value),rnd.uniform(-value, value),rnd.uniform(-value, value))
         self.DesiredVelocity = randomVec
 
-    def ComputeAvoidObstacleVector(self, strength): #Not used!!!!
+    #Not used!!!!
+    def ComputeAvoidObstacleVector(self, strength): 
         ObjectCollide = iObstacle - self.Position
         ObjectDistance = ObjectCollide.Length     
         if ObjectDistance < (iObstacleSize + iDetectonDistance):
@@ -193,6 +233,7 @@ class Agent:
             ObjectCollide.Unitize()
             self.DesiredVelocity += (ObjectCollide*strength)
 
+    #Agents avoid groundfloor
     def ComputeAvoidGroundFloor(self, strength, detectionLength):
         if self.Position.Z < 0.5:
             self.Alive = False
@@ -202,7 +243,7 @@ class Agent:
             uplift = (detectionLength / self.Position.Z -0.99) * strength
             self.DesiredVelocity += rg.Vector3d(0, 0, uplift)
 
-
+    #Agents avoid obstacles
     def ComputeAvoidBrepsVector(self, strength):
         for obstacle in iObstacleBreps:
             projectedPt = obstacle.ClosestPoint(self.Position)
@@ -220,10 +261,12 @@ class Agent:
                 objectCollide.Unitize()
                 self.DesiredVelocity += (objectCollide*strength)
 
+    #Computes wind on agents
     def ComputeWindVector(self, strength):
         self.DesiredVelocity += (environmentSystem.Wind * strength)
-
-    def ComputeUpliftVector(self, strength): #Not used!!!!
+        
+    #Not used!!!!
+    def ComputeUpliftVector(self, strength): 
         for i in range(len(iUpliftArea)):
             testInside = iUpliftArea[i].IsPointInside(self.Position, 0.1, True)
             if testInside == True:
@@ -231,6 +274,7 @@ class Agent:
                 upliftVecotr.Unitize()
                 self.DesiredVelocity += (upliftVector*strength)
 
+    #Computes uplift on agents
     def ComputeUpliftRevolveVector(self, strength, valueMin, valueMax):
         for i in range(len(iUpliftCrvs)):
             t = iUpliftCrvs[i].ClosestPoint(self.Position)[1]
@@ -261,6 +305,7 @@ class Bird(Agent):
             self.Rotation = False
         self.Display = self.WithoutFood
 
+    #SpawnsNewBirds if to much died
     def SpawnNewBird(self, locations, amount):
         aliveCount = 0
         for bird in birdSystem.Birds:
@@ -276,15 +321,18 @@ class Bird(Agent):
     def ComputeFoodToNestVector(self):
         pass
 
+    #Searches for closest food
     def FindClosestFood(self):
         closestFood = 0
         foodDistance = 10000
         for i in range(len(environmentSystem.Food)):
-            if self.Position.DistanceTo(environmentSystem.Food[i]) < foodDistance:
-                closestFood = environmentSystem.Food[i]
-                foodDistance = self.Position.DistanceTo(environmentSystem.Food[i])
+            if environmentSystem.AmountFood[i] > 0:
+                if self.Position.DistanceTo(environmentSystem.Food[i]) < foodDistance:
+                    closestFood = environmentSystem.Food[i]
+                    foodDistance = self.Position.DistanceTo(environmentSystem.Food[i])
         self.ClosestFood = closestFood
 
+    #Computes vector to closest food
     def ComputeToFoodVector(self, strength):
         #toFood = iFoodSource - self.Position
         if self.ClosestFood != 0:
@@ -293,15 +341,8 @@ class Bird(Agent):
             toFood *= strength
             self.DesiredVelocity += toFood
 
+    #Computes standard flocking behaviors
     def ComputeFlockingVector(self):
-        #Separation
-
-        #Alignment
-
-        #Cohesion
-        #Try to find birds of same colour and attract to them up to a certain seperation distance.
-        #If to close -> get away until seperationdistance = true
-        
 
         _birdPositions = []
         for bird in birdSystem.Birds:
@@ -325,7 +366,8 @@ class Bird(Agent):
                 goToBird.Unitize()
                 goToBird *= (iSeparationStrength / (distance + 1))**2
                 self.DesiredVelocity += goToBird
-            
+         
+    #Bird avoids predator 
     def ComputeAvoidPredatorVector(self, strength):
         for predator in predatorSystem.Predators:
             getAway = self.Position - predator.Position 
@@ -334,6 +376,7 @@ class Bird(Agent):
                 getAway.Unitize()
                 self.DesiredVelocity += (getAway*strength)
 
+    #Group of birds avoid predator
     def ComputeGroupAvoidPredatorVector(self, strength):
         for predator in predatorSystem.Predators:
             if predator.ClosestBird == "No one": continue
@@ -353,6 +396,7 @@ class Bird(Agent):
 
 ### Food
 
+    #Bird dies without food
     def DieWithoutFood(self, timeToDeath):
         if self.WithoutFood == "Not initialized":
             self.WithoutFood = timeToDeath
@@ -362,6 +406,7 @@ class Bird(Agent):
         else:
             self.WithoutFood -= 1
 
+    #Bird eats food
     def Eat(self, eatDistance, addTimeToDeath):
         if self.ClosestFood != 0:
             if self.Position.DistanceTo(self.ClosestFood) < eatDistance:
@@ -369,6 +414,7 @@ class Bird(Agent):
 
 ############################################# Update
 
+    #Updates bird
     def Update(self):
         self.Velocity = (1-iAgentVelocity) * self.Velocity + iAgentVelocity * self.DesiredVelocity
         if (self.Velocity.Length > 0.1):
@@ -396,8 +442,10 @@ class Predator(Agent):
         else: 
             self.Rotation = False
         self.Display = self.IsHungry
-    #Defining Vectors
 
+###Defining Vectors
+
+    #Spawns new predator if too much died
     def SpawnNewPredator(self, locations):
         aliveCount = 0
         for predator in predatorSystem.Predators:
@@ -410,6 +458,7 @@ class Predator(Agent):
 
 ### Hunt
 
+    #Searches for closest bird in given radius
     def SearchClosestBird(self):
         if self.Hunting == True:
             position = self.Position
@@ -431,6 +480,7 @@ class Predator(Agent):
                 self.Hunting = False
                 self.ClosestBird = "No one"
 
+    #If predator is not hungry, he waits till he's hungry again
     def WaitingForFood(self, strength, valueMin, valueMax, upliftStrength):
         if self.Hunting == False: 
             vec = rg.Vector3d(self.Velocity.X, self.Velocity.Y, 0.0)
@@ -447,6 +497,7 @@ class Predator(Agent):
 
 ### Eat
 
+    #Computes if prpedator is hungry
     def Hungry(self, amountOfFood, restTime):
         if self.IsHungry == "Not initialized":
             self.IsHungry = amountOfFood
@@ -458,6 +509,7 @@ class Predator(Agent):
             self.IsHungry = amountOfFood
             self.Hunting = True
 
+    #Predator eats a bird if he's in given distance
     def EatBird(self, eatDistance):
         if self.IsHungry > 0:
             if self.ClosestBird != "No one":
@@ -468,6 +520,7 @@ class Predator(Agent):
 
 ############################################# Update
 
+    #Updates predator
     def Update(self):
         self.Velocity = (1-iPredatorVelocity) * self.Velocity + iPredatorVelocity * self.DesiredVelocity
         if (self.Velocity.Length > 0.1):
@@ -478,15 +531,16 @@ class Predator(Agent):
             if self.Display != "Dead":
                 self.Display = self.IsHungry
 
-##########################################################################################################
+### Main script ###
 
-#Initialize BirdSystem & PredatorSystem
+#Initialize EnvironmentSystem, BirdSystem & PredatorSystem & Resets
 if iEnabled == True or iReset:
     if iReset or "birdSystem" not in globals():
         environmentSystem = EnvironmentSystem()
         birdSystem = BirdSystem(iAgentCount)
         predatorSystem = PredatorSystem(iPredatorCount)
     else: 
+#Updates the systems
         environmentSystem.Update()
         birdSystem.Update()
         predatorSystem.Update()
@@ -497,23 +551,28 @@ birdTag = []
 
 predatorHistory = []
 predatorPositions = []
+predatorTarget = []
 predatorTag = []
 
+#Creating predator output
 for predator in predatorSystem.Predators:
     predatorPositions.append(predator.Position)
     #predatorHistory.append(rg.PolylineCurve(predator.History))
     predatorHistory.append(rg.NurbsCurve.Create(False, 3, predator.History)) 
     predatorTag.append(predator.Display)
-
-
+    if predator.ClosestBird != "No one":
+        predatorTarget.append(birdSystem.Birds[predator.ClosestBird].Position)
+#Creating bird output
 for bird in birdSystem.Birds:
     birdPositions.append(bird.Position)
     #birdHistory.append(rg.PolylineCurve(bird.History))
     birdHistory.append(rg.NurbsCurve.Create(False, 3, bird.History))
     birdTag.append(bird.Display)
 
-
+#Initialize ouput
 oWind = environmentSystem.Wind
+oFood = environmentSystem.Food
+oAmountFood = environmentSystem.AmountFood
 
 oBirdHistory = birdHistory
 oBirdPositions = birdPositions
@@ -522,4 +581,4 @@ oBirdTag = birdTag
 oPredatorHistory = predatorHistory
 oPredatorPositions = predatorPositions
 oPredatorTag = predatorTag
-
+oPredatorTarget = predatorTarget
