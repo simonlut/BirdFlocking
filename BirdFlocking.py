@@ -160,7 +160,7 @@ class PredatorSystem:
             predator.EatBird(5)
             predator.ComputeRandomMovement(0.2)
             predator.ComputeAvoidGroundFloor(1.0, 20)
-            predator.SearchClosestBird()
+            predator.SearchClosestBird(100)
             predator.WaitingForFood(2.0, 0.1, 0.2, 0.01)
             predator.ComputeAvoidBrepsVector(50)
             predator.ComputeUpliftRevolveVector(0.05, 0.4, 0.5)
@@ -423,21 +423,39 @@ class Predator(Agent):
 
 ### Hunt
 
-    def SearchClosestBird(self):
+    def SearchClosestBird(self, searchStrength):
         if self.Hunting == True:
-            position = self.Position
-            closestBird = self.Position
-            distance = iPredatorRadius
-            for i in range(len(birdSystem.Birds)):
-                if birdSystem.Birds[i].Alive == True:
-                    dis = position.DistanceTo(birdSystem.Birds[i].Position)
-                    if dis < distance:
-                        closestBird = birdSystem.Birds[i].Position
-                        distance = dis
-                        self.ClosestBird = i
-            if distance < iPredatorRadius:
+            #Current bird positions/velocities
+            _birdPositions = []
+            _birdVelocities = []
+            _birdAlive = []
+            for bird in birdSystem.Birds:
+                _birdPositions.append(bird.Position)
+                _birdVelocities.append(bird.Velocity)
+                _birdAlive.append(bird.Alive)
+            
+            #init values
+            myPosition = self.Position
+            closestBird = rg.Point3d(0.0,0.0,0.0)
+            closestBirdVel = rg.Vector3d(0.0,0.0,0.0)
+            smallestDistance = iPredatorRadius
+
+            #Find position and velocity of closest bird
+            for i in range(len(_birdPositions)):
+                if _birdAlive[i] == False: continue
+                disToBird = myPosition.DistanceTo(_birdPositions[i])
+                if disToBird < smallestDistance:
+                    closestBird = _birdPositions[i]
+                    closestBirdVel = _birdVelocities[i]
+                    smallestDistance = disToBird
+                    self.ClosestBird = i
+
+            #If closest bird is within reach, hunt it and increase velocity
+            if smallestDistance < iPredatorRadius:
                 targetVec = closestBird - self.Position
+                dis = targetVec.Length
                 targetVec.Unitize()
+                targetVec *= (searchStrength / (dis + 1))**2
                 self.DesiredVelocity += targetVec
                 self.Hunting = True
             else:
