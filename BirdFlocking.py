@@ -193,6 +193,8 @@ class BirdSystem:
             #bird.ComputeGroupAvoidPredatorVector(10) #Not used
             bird.ComputeAvoidPredatorVector(10)
             bird.ComputeBackToNest(10)
+            bird.ComputeAvoidBrepsVectorTwo()
+            bird.ComputeAvoidBoundingBoxVector()
         for bird in self.Birds:
             if bird.Alive == False: continue 
             bird.Update()
@@ -231,11 +233,14 @@ class PredatorSystem:
             predator.ComputeAvoidBrepsVector(50)
             predator.ComputeUpliftRevolveVector(0.05, 0.4, 0.5)
             predator.ComputeWindVector(0.01)
+            predator.ComputeAvoidBoundingBoxVector()
+            predator.ComputeAvoidBrepsVectorTwo()
         for predator in self.Predators:
             if predator.Alive == False: continue
             predator.Update()
         predator.SpawnNewPredator(iPredatorSpawnLocations)
 
+##########################################################################################################
 
 ##########################################################################################################
 
@@ -280,6 +285,45 @@ class Agent:
                 objectCollide.Unitize()
                 self.DesiredVelocity += (objectCollide*strength)
 
+    def ComputeAvoidBoundingBoxVector(self):
+        projectedPt = iBoundingBox.ClosestPoint(self.Position)
+        objectCollide = projectedPt - self.Position
+        objectDistance = objectCollide.Length
+        if 0 < objectDistance <= 2:
+            obstacleFaces = iBoundingBox.Faces 
+            for face in obstacleFaces: #Determine which face is closest
+                closestPoint = face.ClosestPoint(self.Position)
+                surfacePoint = rg.Surface.PointAt(face, closestPoint[1], closestPoint[2])
+                distance = surfacePoint.DistanceTo(self.Position)
+                if 0 < distance <= 1:  #checking if agent is on face
+                    plane = face.FrameAt(0.5, 0.5)
+                    zAxis = plane[1].ZAxis
+                    zAxis.Unitize()
+                    self.Velocity.Unitize()
+                    self.DesiredVelocity += (-zAxis*(2*objectDistance**2)*1000 + self.Velocity*(2*objectDistance**2))  *100
+
+    def ComputeAvoidBrepsVectorTwo(self):
+        for obstacle in iObstacleBreps:
+            projectedPt = obstacle.ClosestPoint(self.Position)
+            objectCollide = projectedPt - self.Position
+            objectDistance = objectCollide.Length
+            if 0 < objectDistance <= 20:
+                obstacleFaces = obstacle.Faces 
+                for face in obstacleFaces: #Determine which face is closest
+                    closestPoint = face.ClosestPoint(self.Position)
+                    surfacePoint = rg.Surface.PointAt(face, closestPoint[1], closestPoint[2])
+                    distance = surfacePoint.DistanceTo(self.Position)
+                    if 0 < distance/objectDistance <= 10:  #checking if agent is on face
+                        plane = face.FrameAt(0.5, 0.5)
+                        zAxis = plane[1].ZAxis
+                        zAxis.Unitize()
+                        self.Velocity.Unitize()
+                        self.DesiredVelocity += (zAxis*(2*objectDistance**2) + self.Velocity*(2*objectDistance**2))  *20
+
+    def ComputeWindVector(self, strength):
+        self.DesiredVelocity += (environmentSystem.Wind * strength)
+
+    def ComputeUpliftVector(self, strength): #Not used!!!!
     #Computes wind on agents
     def ComputeWindVector(self, strength):
         self.DesiredVelocity += (environmentSystem.Wind * strength)
@@ -308,8 +352,8 @@ class Agent:
                     vector.Rotate(rnd.uniform(-valueMin, -valueMax), rg.Vector3d(0,0,1))
                 #vector.Unitize()
                 self.DesiredVelocity += (vector*strength)
-    pass
 
+#########################################################################################################          
 
 #########################################################################################################          
 
@@ -675,6 +719,8 @@ oWind = environmentSystem.Wind
 oFood = environmentSystem.Food
 oAmountFood = environmentSystem.AmountFood
 
+oWind = environmentSystem.Wind
+
 oBirdHistory = birdHistory
 oBirdPositions = birdPositions
 oBirdTag = birdTag
@@ -684,3 +730,4 @@ oPredatorPositions = predatorPositions
 oPredatorTag = predatorTag
 oPredatorTarget = predatorTarget
 obirdVelocities = birdVelocities
+
