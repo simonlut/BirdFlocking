@@ -323,7 +323,6 @@ class Agent:
     def ComputeWindVector(self, strength):
         self.DesiredVelocity += (environmentSystem.Wind * strength)
 
-    def ComputeUpliftVector(self, strength): #Not used!!!!
     #Computes wind on agents
     def ComputeWindVector(self, strength):
         self.DesiredVelocity += (environmentSystem.Wind * strength)
@@ -717,7 +716,7 @@ for bird in birdSystem.Birds:
 #Initialize ouput
 oWind = environmentSystem.Wind
 oFood = environmentSystem.Food
-oAmountFood = environmentSystem.AmountFood
+oFoodTag = environmentSystem.AmountFood
 
 oWind = environmentSystem.Wind
 
