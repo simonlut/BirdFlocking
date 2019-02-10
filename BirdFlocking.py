@@ -8,6 +8,7 @@
 import Rhino.Geometry as rg
 import random as rnd
 import math
+import copy
 
 class EnvironmentSystem:
     def __init__(self):
@@ -151,19 +152,36 @@ class BirdSystem:
     #Realtime flocking optimization using R-Tree system.
     def __init__(self,agentCount):
         self.Birds = []
-        self.Radius = 10
+        self.Nests = []
+   
         self.MinCount = agentCount / 2
-        for i in range(0,agentCount):
-            location = rnd.choice(iAgentSpawnLocations)
-            self.Birds.append(Bird(rg.Point3d(rnd.uniform(location.X - self.Radius,location.X + self.Radius),rnd.uniform(location.Y - self.Radius,location.Y + self.Radius),rnd.uniform(location.Z,location.Z + self.Radius*2))))
 
-    #Updates the birds
+         #Create New Nests
+        NestCount = len(iAgentSpawnLocations)
+        for i in range (0, NestCount):
+            self.Nests.append(Nest(i, iAgentSpawnLocations[i]))
+
+
+        #Check for inconsistencies
+        if(NestCount < iNestCount):
+            print ("Error iAgentSpawnLocations VS iNestCount -> See Guillaume")
+
+    
+        self._nestsAvailable = copy.copy(self.Nests)
+        for i in range(0, iNestCount):
+            nest = rnd.choice(self._nestsAvailable)
+            self._nestsAvailable.remove(nest)
+            for j in range(0, agentCount):
+                self.Birds.append(Bird(nest))
+   
+
+
     def Update(self):
         for bird in self.Birds:
             if bird.Alive == False: continue 
-            bird.DieWithoutFood(700)
+            bird.DieWithoutFood(600)
             bird.FindClosestFood()
-            bird.Eat(10, 5)
+            bird.Eat(50, 10)
             bird.ComputeRandomMovement(0.05)
             bird.ComputeAvoidGroundFloor(10, 30)
             bird.ComputeToFoodVector(10)
@@ -175,24 +193,33 @@ class BirdSystem:
             bird.ComputeUpliftRevolveVector(0.5, 3.0, 4.0)
             bird.ComputeGroupAvoidPredatorVector(10)
             bird.ComputeAvoidPredatorVector(10)
+            bird.ComputeBackToNest(10)
         for bird in self.Birds:
             if bird.Alive == False: continue 
             bird.Update()
         bird.SpawnNewBird(iAgentSpawnLocations, 5)
-
+         
 ##########################################################################################################
 
 class PredatorSystem:
     def __init__(self, predatorCount):
         self.Predators = []
-        self.Radius = 10
+        self.Nests = []
         self.Count = len(self.Predators)
         self.MinCount = predatorCount / 2
-        for i in range(0,predatorCount):
-            location = rnd.choice(iPredatorSpawnLocations)
-            self.Predators.append(Predator(rg.Point3d(rnd.uniform(location.X - self.Radius,location.X + self.Radius),rnd.uniform(location.Y - self.Radius,location.Y + self.Radius),rnd.uniform(location.Z,location.Z + self.Radius*2))))
 
-    #Updates the predators
+        #Create New Nests
+        NestCount = len(iPredatorSpawnLocations)
+        for i in range (0, NestCount):
+            self.Nests.append(Nest(i, iPredatorSpawnLocations[i]))
+            print (i)
+ 
+        for i in range(0, NestCount):
+            nest = self.Nests[i]
+            for j in range(0, predatorCount):
+                self.Predators.append(Predator(nest))
+
+
     def Update(self):
         for predator in self.Predators:
             if predator.Alive == False: continue
@@ -214,9 +241,12 @@ class PredatorSystem:
 ##########################################################################################################
 
 class Agent:
-    def __init__(self, initialPosition):
-        self.Position = initialPosition
+    def __init__(self, nest):
+        self.Radius = 10
+        self.Position = rg.Point3d(rnd.uniform(nest.Position.X - self.Radius,nest.Position.X + self.Radius),rnd.uniform(nest.Position.Y - self.Radius,nest.Position.Y + self.Radius),rnd.uniform(nest.Position.Z,nest.Position.Z + self.Radius*2))
         self.Velocity = rg.Vector3d(0.0, 0.0, 0.0)
+        self.Nest = nest
+        self.History = [self.Position]
 
     #Small random vector
     def ComputeRandomMovement(self, value):
@@ -289,16 +319,24 @@ class Agent:
                     vector.Rotate(rnd.uniform(-valueMin, -valueMax), rg.Vector3d(0,0,1))
                 #vector.Unitize()
                 self.DesiredVelocity += (vector*strength)
+    pass
+
 
 #########################################################################################################          
 
+
+
 class Bird(Agent):
-    def __init__(self, initialPosition):
-        self.Position = initialPosition
-        self.Velocity = rg.Vector3d(0.0, 0.0, 0.0)
-        self.History = [self.Position]
+    def __init__(self, nest):
+        Agent.__init__(self, nest)
         self.Alive = True
         self.WithoutFood = "Not initialized"
+        self.Full = False
+        self.Hungry = True
+        self.FullValue = 1000
+        self.HungryValue = 500
+
+     
         if rnd.choice([0, 1]) > 0.5:
             self.Rotation = True
         else: 
@@ -312,10 +350,9 @@ class Bird(Agent):
             if bird.Alive == True:
                 aliveCount += 1
         if aliveCount < birdSystem.MinCount: 
-            location = rnd.choice(locations)
-            radius = birdSystem.Radius
+            location = rnd.choice(birdSystem.Nests)
             for i in range(amount):
-                birdSystem.Birds.append(Bird(rg.Point3d(rnd.uniform(location.X - radius,location.X + radius),rnd.uniform(location.Y - radius,location.Y + radius),rnd.uniform(location.Z,location.Z + radius*2))))
+                birdSystem.Birds.append(Bird(location))
 
 
     def ComputeFoodToNestVector(self):
@@ -325,23 +362,33 @@ class Bird(Agent):
     def FindClosestFood(self):
         closestFood = 0
         foodDistance = 10000
-        for i in range(len(environmentSystem.Food)):
-            if environmentSystem.AmountFood[i] > 0:
-                if self.Position.DistanceTo(environmentSystem.Food[i]) < foodDistance:
-                    closestFood = environmentSystem.Food[i]
-                    foodDistance = self.Position.DistanceTo(environmentSystem.Food[i])
+        lenFood = len(environmentSystem.Food)
+        for i in range(lenFood):
+            if self.Position.DistanceTo(environmentSystem.Food[i]) < foodDistance:
+                closestFood = environmentSystem.Food[i]
+                foodDistance = self.Position.DistanceTo(environmentSystem.Food[i])
         self.ClosestFood = closestFood
 
     #Computes vector to closest food
     def ComputeToFoodVector(self, strength):
         #toFood = iFoodSource - self.Position
-        if self.ClosestFood != 0:
+        if (self.ClosestFood != 0 and self.Hungry == True):
             toFood = self.ClosestFood - self.Position
             toFood.Unitize()
             toFood *= strength
             self.DesiredVelocity += toFood
 
-    #Computes standard flocking behaviors
+    #Check if bird is full (not hungry anymore) and compute vector back to original Nest
+    def ComputeBackToNest(self, Strength):
+        if (self.Full == True):
+            toNest = self.Nest.Position - self.Position
+            toNest.Unitize()
+            toNest *= Strength
+            self.DesiredVelocity += toNest
+        pass
+
+
+
     def ComputeFlockingVector(self):
 
         _birdPositions = []
@@ -412,6 +459,17 @@ class Bird(Agent):
             if self.Position.DistanceTo(self.ClosestFood) < eatDistance:
                 self.WithoutFood += addTimeToDeath
 
+            #Define properties for back to Nest
+            if (self.WithoutFood > self.FullValue and self.Full == False):
+                self.Full = True
+                self.Hungry = False
+
+            #Define properties for food hunting
+            if (self.WithoutFood < self.HungryValue and self.Hungry == False) :
+                self.Full = False
+                self.Hungry = True
+
+
 ############################################# Update
 
     #Updates bird
@@ -424,14 +482,13 @@ class Bird(Agent):
             self.History.append(self.Position)
             if self.Display != "Dead":
                 self.Display = self.WithoutFood
+    pass
 
 ##########################################################################################################
 
 class Predator(Agent):
-    def __init__(self, initialPosition):
-        self.Position = initialPosition
-        self.Velocity = rg.Vector3d(0.0, 0.0, 0.0)
-        self.History = [self.Position]
+    def __init__(self,nest):
+        Agent.__init__(self, nest)
         self.Alive = True
         self.Hunting = True
         self.IsHungry = "Not initialized"
@@ -452,9 +509,8 @@ class Predator(Agent):
             if predator.Alive == True:
                 aliveCount += 1
         if aliveCount < predatorSystem.MinCount: 
-            location = rnd.choice(locations)
-            radius = birdSystem.Radius
-            predatorSystem.Predators.append(Predator(rg.Point3d(rnd.uniform(location.X - radius,location.X + radius),rnd.uniform(location.Y - radius,location.Y + radius),rnd.uniform(location.Z,location.Z + radius*2))))
+            nest = rnd.choice(predatorSystem.Nests)
+            predatorSystem.Predators.append(Predator(nest))
 
 ### Hunt
 
@@ -530,10 +586,21 @@ class Predator(Agent):
             self.History.append(self.Position)
             if self.Display != "Dead":
                 self.Display = self.IsHungry
+    pass
 
 ### Main script ###
 
-#Initialize EnvironmentSystem, BirdSystem & PredatorSystem & Resets
+#Define Nest Class available for Birds and Predators
+class Nest:
+    def __init__(self, id, position):
+        self.ID = id
+        self.Position = position
+
+        
+##########################################################################################################
+
+
+#Initialize BirdSystem & PredatorSystem
 if iEnabled == True or iReset:
     if iReset or "birdSystem" not in globals():
         environmentSystem = EnvironmentSystem()
