@@ -417,18 +417,19 @@ class Bird(Agent):
             toNest.Unitize()
             toNest *= Strength
             self.DesiredVelocity += toNest
-        pass
+        
     def ComputeFlockingVector(self, CohesionStrength, AlignStrength):
 
-        #Get current bird positions
-        _birdPositions = []
-        for bird in birdSystem.Birds:
-            _birdPositions.append(bird.Position)
         
-        #Get current velocities
+        _birdPositions = []
         _birdVelocities = []
         for bird in birdSystem.Birds:
-            _birdVelocities.append(bird.Velocity)
+            #Get Birds from same nest
+            if bird.Nest == self.Nest:
+                #Get current bird positions
+                _birdPositions.append(bird.Position)
+                #Get current velocities
+                _birdVelocities.append(bird.Velocity)
 
         #Rtree -> get closest birds to current bird
         ClosestBirds = list(rg.RTree.Point3dClosestPoints(_birdPositions,[self.Position],iDetectonDistance))
