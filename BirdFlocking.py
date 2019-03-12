@@ -18,22 +18,6 @@ class EnvironmentSystem:
         self.Wind *= self.WindSpeed
         self.Food = "Not initialized"
 
-    #Spawns food at different locations - Not used
-    def OLDSpawnFood(self, amountSpawns, initFood):
-        if self.Food == "Not initialized":
-            self.Food = []
-            self.AmountFood = []
-            locations = rnd.sample(iFoodSpawnLocations, amountSpawns)
-            for location in locations:
-                self.Food.append(location)
-                self.AmountFood.append(initFood)
-        elif len(self.Food) < amountSpawns:
-            possibleLocations = iFoodSpawnLocations
-            for existingLocation in self.Food:
-                possibleLocations.remove(existingLocation)
-            newLocation = rnd.choice(possibleLocations)
-            self.Food.append(newLocation)
-            self.AmountFood.append(initFood)
 
     def SpawnFood(self, amountSpawns, respawnTime, initFood):
         if self.Food == "Not initialized":
@@ -57,7 +41,6 @@ class EnvironmentSystem:
                 newLocation = rnd.choice(possibleLocations)
                 self.AmountFood[newLocation] = initFood
 
-    #Not used
     def InitializeFood(self, amount): 
         if self.AmountFood == "Not initialized":
             self.AmountFood = []
@@ -68,18 +51,6 @@ class EnvironmentSystem:
                 del self.AmountFood[i]
                 del self.Food[i]
     
-    #Not used
-    def OLDComputeFoodLive(self, eatDistance):
-        if "birdSystem" in globals():
-            _birdPositions = []
-            for bird in birdSystem.Birds:
-                _birdPositions.append(bird.Position)
-            for i in range(len(self.Food)):
-                closestBirds = list(rg.RTree.Point3dClosestPoints(_birdPositions,[self.Food[i]], eatDistance))
-                self.AmountFood[i] -= len(closestBirds[0])
-                if self.AmountFood[i] <= 0:
-                    del self.AmountFood[i]
-                    del self.Food[i]   
 
     #Computes the amount of food left and despawns it if nothing is left
     def ComputeFoodLive(self, eatDistance):
@@ -121,20 +92,6 @@ class EnvironmentSystem:
     def ComputeWindSpeed(self, strength):
         change = rnd.uniform(-strength, strength)
         self.WindSpeed += change
-
-    #Not used
-    def RandomWindVector(self): 
-        randomVecWind = rg.Vector3d(rnd.uniform(-1.0, 1.0), rnd.uniform(-1.0, 1.0), 0.0)
-        #newVecWind = rg.Vector3d.Rotate(self.Wind, rnd.uniform(0.1, 1), rg.Vector3d(0,0,1))
-        newVecWind = (8/10) * self.Wind + (2/10) * randomVecWind
-        newVecWind.Unitize()
-        self.Wind = newVecWind
-
-    #Not used
-    def RandomVectorLength(self):
-        newVecWind = self.Wind * rnd.uniform(self.Wind.Length/2, self.Wind.Length*1.5)
-        self.Wind = newVecWind
-        print self.Wind.Length
 
     #Updates the environment
     def Update(self):
@@ -187,13 +144,10 @@ class BirdSystem:
             bird.ComputeToFoodVector(7)
             bird.ComputeFlockingVector(iCohesionStrength, iAlignStrength)
             bird.ComputeWindVector(iWindSpeed)
-            bird.ComputeAvoidBrepsVector(100)
-            #bird.ComputeUpliftVector()  #Not used!!!
             bird.ComputeUpliftRevolveVector(0.5, 3.0, 4.0)
-            #bird.ComputeGroupAvoidPredatorVector(10) #Not used
             bird.ComputeAvoidPredatorVector(10)
             bird.ComputeBackToNest(10)
-            bird.ComputeAvoidBrepsVectorTwo()
+            bird.ComputeAvoidBrepsVector()
             bird.ComputeAvoidBoundingBoxVector()
         for bird in self.Birds:
             if bird.Alive == False: continue 
@@ -230,11 +184,10 @@ class PredatorSystem:
             predator.ComputeAvoidGroundFloor(1.0, 20)
             predator.SearchClosestBird(100)
             predator.WaitingForFood(2.0, 0.1, 0.2, 0.01)
-            predator.ComputeAvoidBrepsVector(50)
             predator.ComputeUpliftRevolveVector(0.05, 0.4, 0.5)
             predator.ComputeWindVector(0.01)
             predator.ComputeAvoidBoundingBoxVector()
-            predator.ComputeAvoidBrepsVectorTwo()
+            predator.ComputeAvoidBrepsVector()
         for predator in self.Predators:
             if predator.Alive == False: continue
             predator.Update()
@@ -302,7 +255,7 @@ class Agent:
                     self.Velocity.Unitize()
                     self.DesiredVelocity += (-zAxis*(2*objectDistance**2)*1000 + self.Velocity*(2*objectDistance**2))  *100
 
-    def ComputeAvoidBrepsVectorTwo(self):
+    def ComputeAvoidBrepsVector(self):
         for obstacle in iObstacleBreps:
             projectedPt = obstacle.ClosestPoint(self.Position)
             objectCollide = projectedPt - self.Position
@@ -417,18 +370,19 @@ class Bird(Agent):
             toNest.Unitize()
             toNest *= Strength
             self.DesiredVelocity += toNest
-        pass
+        
     def ComputeFlockingVector(self, CohesionStrength, AlignStrength):
 
-        #Get current bird positions
-        _birdPositions = []
-        for bird in birdSystem.Birds:
-            _birdPositions.append(bird.Position)
         
-        #Get current velocities
+        _birdPositions = []
         _birdVelocities = []
         for bird in birdSystem.Birds:
-            _birdVelocities.append(bird.Velocity)
+            #Get Birds from same nest
+            if bird.Nest == self.Nest:
+                #Get current bird positions
+                _birdPositions.append(bird.Position)
+                #Get current velocities
+                _birdVelocities.append(bird.Velocity)
 
         #Rtree -> get closest birds to current bird
         ClosestBirds = list(rg.RTree.Point3dClosestPoints(_birdPositions,[self.Position],iDetectonDistance))
